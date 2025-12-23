@@ -8,6 +8,9 @@ use App\Models\Admin;
 use App\Notifications\AdminResetPasswordNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
+
+
 
 class PasswordResetController extends Controller
 {
@@ -41,13 +44,26 @@ class PasswordResetController extends Controller
         if(!$resetData){
             return response()->json(['message' => 'Invalid token or email.'],400); 
         }
-        $admin = Admin::where('email', $request->email)->first();
+
+        $expTime = 60;
+        $tokenCreationTime = Carbon::parse($resetData->created_at);
         
+        
+        if($tokenCreationTime->addMinutes($expTime)->isPast()){
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            return response()->json(['message' => 'This reset token has expired. Please request a new one.'], 400);
+
+        }
+
+        $admin = Admin::where('email', $request->email)->first();
+        if($admin){
             $admin->password = $request->password;
             $admin->save();
      
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
         return response()->json(['message'=>'Password resett sucessfully!']);
+        }
+        return response()->json(['message'=>'Admin not found.'], 404);
 
     }
 }

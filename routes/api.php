@@ -21,5 +21,5 @@ Route::middleware('auth:sanctum')->group(function (){
     });
 
 // password forget/reset route
-Route::post('/admin/forgot-password', [PasswordResetController::class, 'sendResetLink']);
-Route::post('/admin/reset-password', [PasswordResetController::class, 'resetPassword']);
+Route::post('/admin/forgot-password', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1');
+Route::post('/admin/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttles:5,1');
