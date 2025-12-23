@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
+use App\Http\Controllers\Admin\PasswordResetController;
 
 Route::get('/user', function (Request $request) {
         return $request->user();
@@ -18,3 +19,7 @@ Route::middleware('auth:sanctum')->group(function (){
         Route::post('/admin/logout',[AdminAuthController::class, 'logout']);
         Route::put('/admin/update',[AdminAuthController::class, 'updateProfile']);
     });
+
+// password forget/reset route
+Route::post('/admin/forgot-password', [PasswordResetController::class, 'sendResetLink']);
+Route::post('/admin/reset-password', [PasswordResetController::class, 'resetPassword']);
