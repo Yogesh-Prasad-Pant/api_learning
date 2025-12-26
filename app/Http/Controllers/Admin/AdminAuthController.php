@@ -5,10 +5,21 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-
+use App\Models\Admin;
 class AdminAuthController extends Controller
 {
-
+    public function index(Request $request){
+        $admins = Admin::query()->when($request->search, function ($query, $search){
+            $query->where(function($q) use ($search){
+                $q->where('name','like',"%{$search}%")
+                ->orWhere('email','like',"%{$search}%");
+            });
+        })->latest()->paginate(10);
+        return response()->json([
+            'status' => 'success',
+            'data' => $admins
+        ],200);
+    }
     // function for login 
     public function login(Request $request)
     {
@@ -54,6 +65,7 @@ class AdminAuthController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'contact_no' => ['sometimes', 'string', 'max:15'],
             'address' => ['sometimes', 'string'],
+            'email' => ['sometimes','email','unique:admins,email,' . $admin->id],
         ]);
         $admin->update($data);
         $admin->refresh();

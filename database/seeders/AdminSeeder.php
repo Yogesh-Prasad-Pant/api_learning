@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-
+use  App\Models\Admin;
 class AdminSeeder extends Seeder
 {
     /**
@@ -12,15 +12,53 @@ class AdminSeeder extends Seeder
      */
     public function run(): void
     {
-        \App\Models\Admin::create([
-        'name' => 'Rabin Dc',
-        'email' => 'admin@shop.com',
-        'password' => \Illuminate\Support\Facades\Hash::make('password123'),
-        'role' => 'admin',
-        'contact_no' => '9800000000',
-        'address' => 'Kathmandu, Nepal',
-        'status' => 'active',
-    ]);
+        $admins = [
+            [
+                'name' => 'Aarav Sharma',
+                'email' => 'aarav@example.com',
+                'password' => 'password123',
+                'contact_no' => '9841000001',
+                'address' => 'Kathmandu, Nepal',
+                'role' => 'super_admin', // Overriding default
+            ],
+            [
+                'name' => 'Emma Watson',
+                'email' => 'emma@example.com',
+                'password' => 'password123',
+                'contact_no' => '9841000002',
+                'address' => 'London, UK',
+                'role' => 'manager',
+            ],
+            [
+                'name' => 'Liam Chen',
+                'email' => 'liam@example.com',
+                'password' => 'password123',
+                'contact_no' => '9841000003',
+                'address' => 'Singapore',
+                'role' => 'editor',
+            ],
+            [
+                'name' => 'Sofia Rodriguez',
+                'email' => 'sofia@example.com',
+                'password' => 'password123',
+                'contact_no' => '9841000004',
+                'address' => 'Madrid, Spain',
+                'role' => 'admin', // Matches your default
+            ],
+            [
+                'name' => 'Yuki Tanaka',
+                'email' => 'yuki@example.com',
+                'password' => 'password123',
+                'contact_no' => '9841000005',
+                'address' => 'Tokyo, Japan',
+                'role' => 'support',
+            ],
+        ];
+
+        foreach ($admins as $adminData) {
+            // Using forceCreate to ensure 'role' is saved despite $fillable restrictions
+            Admin::forceCreate($adminData);
+        }
         //
     }
 }

@@ -11,7 +11,7 @@ Route::get('/user', function (Request $request) {
 
 
 // public route for login
-Route::post('/admin/login', [AdminAuthController::class, 'login']);
+Route::post('/admin/login', [AdminAuthController::class, 'login'])->middleware('throttle:5,1');
 
 // protected routes for updating profile and  logout
 
@@ -21,5 +21,7 @@ Route::middleware('auth:sanctum')->group(function (){
     });
 
 // password forget/reset route
-Route::post('/admin/forgot-password', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1');
-Route::post('/admin/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttles:5,1');
+Route::middleware('throttle:3,1')->group(function(){
+    Route::post('/admin/forgot-password', [PasswordResetController::class, 'sendResetLink']);
+    Route::post('/admin/reset-password', [PasswordResetController::class, 'resetPassword']);
+    });
