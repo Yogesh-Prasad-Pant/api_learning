@@ -8,11 +8,11 @@
 ## 1. Authentication & Account Recovery (Public)
 *No Bearer Token required for these endpoints.*
 
-| Endpoint | Method | Required Fields | Notes |
-| :--- | :--- | :--- | :--- |
-| `/login` | `POST` | `email`, `password` | Throttled (5 attempts/min). Returns `plainTextToken`. |
-| `/forgot-password` | `POST` | `email` | Sends a reset link/code to the user's email. |
-| `/reset-password` | `POST` | `token`, `email`, `password` | Uses the email token to set a new password. |
+| Endpoint          | Method | Required Fields          | Notes                                                 |
+| :---              | :---   | :---                     | :---                                                  |
+| `/login`          | `POST` | `email`,`password`       | Throttled (5 attempts/min). Returns `plainTextToken`. |
+| `/forgot-password`| `POST` | `email`                  | Sends a reset link/code to the user's email.          |
+| `/reset-password` | `POST` | `token`,`email`,`password` | Uses the email token to set a new password.         |
 
 ---
 
@@ -20,12 +20,12 @@
 *Header Required: `Authorization: Bearer {token}`*
 *Header Required: `Accept: application/json`*
 
-| Endpoint | Method | Fields | Purpose |
-| :--- | :--- | :--- | :--- |
-| `/user` | `GET` | None | Returns the authenticated Admin's profile data. |
-| `/admin/update` | `PUT` | `name`, `email`, `address`, `contact_no` | Updates text-based details. |
-| `/admin/update-image` | `POST` | `image` (File) | Updates profile picture (`form-data` required). |
-| `/admin/logout` | `POST` | None | Deletes the current token (revokes session). |
+| Endpoint             | Method| Fields | Purpose                                                       |
+| :---                 | :---  | :---   | :---                                                          |
+| `/user`              | `GET` | None   | Returns the authenticated Admin's profile data.               |
+| `/admin/update`      | `PUT` | `name`,`email`,`address`,`contact_no` | Updates text-based details.    |
+| `/admin/update-image`| `POST`| `image`(File) | Updates profile picture (`form-data` required).        |
+| `/admin/logout`      | `POST`| None   | Deletes the current token (revokes session).                  |
 
 ---
 
@@ -33,10 +33,10 @@
 *Header Required: `Authorization: Bearer {token}`*
 *Middleware: `super_admin`*
 
-| Endpoint | Method | Params | Description |
-| :--- | :--- | :--- | :--- |
+| Endpoint      | Method| Params | Description |
+| :---          | :---  | :--- | :--- |
 | `/admin/list` | `GET` | `?search={query}` | Lists all admins. Searches by **name**, **email**, or **address**. |
-| `/admin/delete/{id}` | `DELETE` | `id` (URL) | Deletes admin account. Logic ensures Super Admins can't be deleted by regulars. |
+| `/admin/delete/{id}`| `DELETE` | `id` (URL) | Deletes admin account. Logic ensures Super Admins can't be deleted by regulars. |
 
 ---
 

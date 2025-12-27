@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use  App\Models\Admin;
+use App\Models\Admin;
 class AdminSeeder extends Seeder
 {
     /**
@@ -17,6 +17,7 @@ class AdminSeeder extends Seeder
             'email' => 'superadmin@example.com',
             'password' => 'password123', 
             'role' => 'super_admin',
+            'status' => 'active',
             'contact_no' => '123456789',
             'address' => '123 Super Street, Admin City', // Added address
         ]);
@@ -27,6 +28,7 @@ class AdminSeeder extends Seeder
             'email' => 'admin@example.com',
             'password' => 'password123',
             'role' => 'admin',
+            'status' => 'pending',
             'contact_no' => '987654321',
             'address' => '456 Regular Ave, User Town', // Added address
         ]);

@@ -13,6 +13,52 @@ use App\Http\Resources\AdminResource;
 
 class AdminAuthController extends Controller
 {
+    //function for the regeistering new admin
+    public function registerRequest(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:admins,email',
+            'password' => 'required|min:8',
+            'contact_no' => 'required',
+            'address' => 'nullable|string',
+        ]);
+            $admin = new Admin();
+            $admin->name = $request->name;
+            $admin->email = $request->email;
+            $admin->password = $request->password;
+            $admin->contact_no = $request->contact_no;
+            $admin->address = $request->address;
+            $admin->role = 'admin';
+            $admin->status = 'pending';
+            $admin->save();
+       
+        return response()->json(['message' => 'Your application has been submitted and is waiting for Super Admin approval.'
+        ],201);
+
+    }
+
+    // function for Super Admin to approve a pending account
+    public function approveAdmin(Request $request, $id)
+    {
+        $admin = Admin::find($id);
+        if(!$admin){
+            return response()->json(['message' => 'Admin account not found'], 404);
+        }
+        if($admin->status === 'active'){
+            return response()->json(['message' => 'This account is already active'], 400);
+        }
+        $admin->status = 'active';
+        $admin->save();
+        return response()->json([
+            'status' => 'success',
+            'message' => "Admin {$admin->name} has been approved and can now log in.",
+            'approved_by' => optional(auth('admin')->user())->name ?? 'Super Admin'
+        ], 200);
+    }
+
+
+    //function for showing the admins
     public function index(Request $request){
         $admins = Admin::query()->when($request->search, function ($query, $search){
             $query->where(function($q) use ($search){
@@ -39,6 +85,10 @@ class AdminAuthController extends Controller
 
         if (Auth::guard('admin')->attempt($credentials, $request->remember)) {
             $admin = Auth::guard('admin')->user();
+            if($admin->status != 'active'){
+                return response()->json(['message' => 'Access Denied. Your account status is: ' . $admin->status . '. Please wait for approval.'
+            ], 403);
+            }
             $token = $admin->createToken('admin-token')->plainTextToken;
             return response()->json([
                 'message' => 'Login successful',
@@ -68,7 +118,7 @@ class AdminAuthController extends Controller
     public function changePassword(Request $request)
     {
         $request->validate(['old_password' => 'required',
-                            'new_password' => 'required|min:6|confirmed',
+                            'new_password' => 'required|min:8|confirmed',
         ]);
         $admin = auth('admin')->user();
         if(!Hash::check($request->old_password, $admin->password)){
