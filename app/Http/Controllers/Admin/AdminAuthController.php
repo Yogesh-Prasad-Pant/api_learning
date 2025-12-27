@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Admin;
+use Illuminate\Support\Facades\Storage;
+
 class AdminAuthController extends Controller
 {
     public function index(Request $request){
@@ -15,6 +17,11 @@ class AdminAuthController extends Controller
                 ->orWhere('email','like',"%{$search}%");
             });
         })->latest()->paginate(10);
+
+        $admins->getCollection()->transform(function ($admin){
+            return['image' => $admin->image ? asset('storage/' . $admin->image) : null,];
+        });
+        
         return response()->json([
             'status' => 'success',
             'data' => $admins
@@ -73,5 +80,21 @@ class AdminAuthController extends Controller
             'message'=> 'Profile updated Successfully',
             'admin' => $admin],200);
     }
-    //
+// function for updating the profile image
+    public function updateImage(Request $request)
+    {
+        $request->validate(['image'=> ['required', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],
+    ]);
+    $admin = $request->user();
+    if ($request->hasFile('image')){
+        if($admin->image && Storage::disk('public')->exists($admin->image)){
+            Storage::disk('public')->delete($admin->image);
+        }
+        $path = $request->file('image')->store('admins','public');
+        $admin->update(['image'=> $path]);
+    }
+        return response()->json(['status' => 'success', 
+                                 'message' =>'Profile image updated successfully',
+                                 'image_url' => asset('storage/' . $admin->image)],200);
+    }
 }

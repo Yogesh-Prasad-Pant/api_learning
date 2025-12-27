@@ -16,6 +16,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Aarav Sharma',
                 'email' => 'aarav@example.com',
+                'image' => 'admins/default.png',
                 'password' => 'password123',
                 'contact_no' => '9841000001',
                 'address' => 'Kathmandu, Nepal',
@@ -24,6 +25,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Emma Watson',
                 'email' => 'emma@example.com',
+                'image' => 'admins/default.png',
                 'password' => 'password123',
                 'contact_no' => '9841000002',
                 'address' => 'London, UK',
@@ -32,6 +34,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Liam Chen',
                 'email' => 'liam@example.com',
+                'image' => 'admins/default.png',
                 'password' => 'password123',
                 'contact_no' => '9841000003',
                 'address' => 'Singapore',
@@ -40,6 +43,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Sofia Rodriguez',
                 'email' => 'sofia@example.com',
+                'image' => 'admins/default.png',
                 'password' => 'password123',
                 'contact_no' => '9841000004',
                 'address' => 'Madrid, Spain',
@@ -48,6 +52,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Yuki Tanaka',
                 'email' => 'yuki@example.com',
+                'image' => 'admins/default.png',
                 'password' => 'password123',
                 'contact_no' => '9841000005',
                 'address' => 'Tokyo, Japan',

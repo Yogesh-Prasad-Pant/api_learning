@@ -9,15 +9,16 @@ Route::get('/user', function (Request $request) {
         return $request->user();
     })->middleware('auth:sanctum');
 
-
 // public route for login
 Route::post('/admin/login', [AdminAuthController::class, 'login'])->middleware('throttle:5,1');
 
-// protected routes for updating profile and  logout
+// protected routes for viewing  searcching and updating profile and  logout
 
 Route::middleware('auth:sanctum')->group(function (){
+        Route::get('admin/list',[AdminAuthController::class, 'index']);
         Route::post('/admin/logout',[AdminAuthController::class, 'logout']);
         Route::put('/admin/update',[AdminAuthController::class, 'updateProfile']);
+        Route::post('admin/update-image',[AdminAuthController::class, 'updateImage']);
     });
 
 // password forget/reset route
