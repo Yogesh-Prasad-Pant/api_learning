@@ -61,7 +61,7 @@ class PasswordResetController extends Controller
             $admin->save();
      
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
-        return response()->json(['message'=>'Password resett sucessfully!']);
+        return response()->json(['message'=>'Password reset sucessfully!']);
         }
         return response()->json(['message'=>'Admin not found.'], 404);
 

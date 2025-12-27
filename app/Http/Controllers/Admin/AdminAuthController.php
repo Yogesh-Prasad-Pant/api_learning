@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Admin;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Resources\AdminResource;
+
+
 class AdminAuthController extends Controller
 {
     public function index(Request $request){
@@ -18,15 +21,10 @@ class AdminAuthController extends Controller
             });
         })->latest()->paginate(10);
 
-        $admins->getCollection()->transform(function ($admin){
-            if($admin->image){
-                 $admin->image = asset('storage/'. str_replace('\\','/',$admin->image));
-            }
-            return $admin;
-        });
+         
         return response()->json([
             'status' => 'success',
-            'data' => $admins
+            'data' => AdminResource::collection($admins)->response()->getData(true)
         ],200);
     }
 
@@ -72,7 +70,7 @@ class AdminAuthController extends Controller
         $request->validate(['old_password' => 'required',
                             'new_password' => 'required|min:6|confirmed',
         ]);
-        $admin = auth()->user();
+        $admin = auth('admin')->user();
         if(!Hash::check($request->old_password, $admin->password)){
             return response()->json([
                 'status' => 'error',
@@ -83,7 +81,9 @@ class AdminAuthController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Password changed successfully'
+            'message' => 'Password changed successfully',
+            'logged_in_as_id' => $admin->id,
+            'logged_in_as_role' => $admin->role
         ]);
 
     }
@@ -102,7 +102,9 @@ class AdminAuthController extends Controller
         $admin->refresh();
         return response()->json([
             'message'=> 'Profile updated Successfully',
-            'admin' => $admin],200);
+            'admin' => $admin,
+            'logged_in_as_id' => auth('admin')->id()
+        ],200);
     }
 
 
@@ -121,7 +123,9 @@ class AdminAuthController extends Controller
     }
         return response()->json(['status' => 'success', 
                                  'message' =>'Profile image updated successfully',
-                                 'image_url' => asset('storage/' . $admin->image)],200);
+                                 'image_url' => asset('storage/' . $admin->image),
+                                 'logged_in_as_id' => auth('admin')->id()
+                                ],200);
     }
 
 
@@ -131,15 +135,21 @@ class AdminAuthController extends Controller
         if(!$admin){
             return response()->json(['message' => 'Admin not found'], 404);
         }
-        if($admin->image){
-            if(Storage::disk('public')->exists($admin->image)){
-                Storage::disk('public')->delete($admin->image);
+        $currentUser = auth('admin')->user();
+        if($currentUser->role === 'super_admin' || $currentUser->id == $id){
+
+            if($admin->image){
+                if(Storage::disk('public')->exists($admin->image)){
+                    Storage::disk('public')->delete($admin->image);
+                }
             }
+            $admin->delete();
+            return response()->json(['status'=> 'success',
+                                 'message'=> 'Account deleted successfully'
+            ]);
         }
-        $admin->delete();
-        return response()->json(['status'=> 'success',
-                                 'message'=> 'Admin deleted successfully'
-        ]);
+        return response()->json(['message' => 'Unauthorized. You can not delete other account'], 403);
+        
     }
 
 }

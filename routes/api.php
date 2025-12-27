@@ -15,12 +15,12 @@ Route::post('/admin/login', [AdminAuthController::class, 'login'])->middleware('
 // protected routes for viewing  searching and updating profile and  logout
 
 Route::middleware('auth:sanctum')->group(function (){
-        Route::get('admin/list',[AdminAuthController::class, 'index']);
+        Route::get('/admin/list',[AdminAuthController::class, 'index']);
         Route::post('/admin/logout',[AdminAuthController::class, 'logout']);
         Route::post('/admin/change-password', [AdminAuthController::class, 'changePassword']);
         Route::put('/admin/update',[AdminAuthController::class, 'updateProfile']);
-        Route::post('admin/update-image',[AdminAuthController::class, 'updateImage']);
-        Route::delete('admin/delete/{id}',[AdminAuthController::class, 'deleteAdmin']);
+        Route::post('/admin/update-image',[AdminAuthController::class, 'updateImage']);
+        Route::delete('/admin/delete/{id}',[AdminAuthController::class, 'deleteAdmin']);
     });
 
 // password forget/reset route
