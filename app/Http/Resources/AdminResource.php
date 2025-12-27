@@ -18,6 +18,7 @@ class AdminResource extends JsonResource
                 'name' => $this->name,
                 'email' => $this->email,
                 'role' => $this->role,
+                'status' => $this->status,
                 'address' => $this->address,
                 'contact_no' => $this->contact_no,
                 'image' =>  $this->image ? asset('storage/'  . str_replace('\\','/', $this->image)) : null,

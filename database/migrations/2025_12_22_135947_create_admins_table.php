@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('image')->nullable();
             $table->string('role')->default('shop_owner'); 
-            $table->string('status')->default('pending'); 
+            $table->enum('status', ['pending', 'active', 'suspended'])->default('pending'); 
             $table->string('contact_no');
             $table->text('address');
             $table->string('password');

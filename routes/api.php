@@ -17,7 +17,7 @@ Route::post('/admin/login', [AdminAuthController::class, 'login'])->middleware('
 // Routes that only super_admin can access
 Route::middleware(['auth:sanctum','super_admin'])->group(function(){
         Route::get('/admin/list',[AdminAuthController::class, 'index']);
-        Route::post('/admin/approve/{id}',[AdminAuthController::class, 'approveAdmin']);
+        Route::post('/admin/change-status/{id}',[AdminAuthController::class, 'changeStatus']);
 });
 
 // protected routes for viewing  searching and updating profile and  logout

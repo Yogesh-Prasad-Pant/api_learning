@@ -39,20 +39,22 @@ class AdminAuthController extends Controller
     }
 
     // function for Super Admin to approve a pending account
-    public function approveAdmin(Request $request, $id)
-    {
+    public function changeStatus(Request $request, $id)
+    {   
+        $request->validate(['status' => 'required|in:active,pending,suspended']);
+
         $admin = Admin::find($id);
         if(!$admin){
             return response()->json(['message' => 'Admin account not found'], 404);
         }
-        if($admin->status === 'active'){
-            return response()->json(['message' => 'This account is already active'], 400);
+        if(auth('admin')->id() == $id && $request->status !== 'active'){
+            return response()->json(['message' => 'You can not suspend or deactive your own super admin account'],400);
         }
-        $admin->status = 'active';
+        $admin->status = $request->status;
         $admin->save();
         return response()->json([
             'status' => 'success',
-            'message' => "Admin {$admin->name} has been approved and can now log in.",
+            'message' => "Admin {$admin->name} is now {$request->status}.",
             'approved_by' => optional(auth('admin')->user())->name ?? 'Super Admin'
         ], 200);
     }
@@ -85,9 +87,12 @@ class AdminAuthController extends Controller
 
         if (Auth::guard('admin')->attempt($credentials, $request->remember)) {
             $admin = Auth::guard('admin')->user();
-            if($admin->status != 'active'){
+            if($admin->status === 'pending'){
                 return response()->json(['message' => 'Access Denied. Your account status is: ' . $admin->status . '. Please wait for approval.'
             ], 403);
+            }
+            if ($admin->status === 'suspended') {
+                 return response()->json(['message' => 'Your account has been suspended. Please contact the Super Admin.'], 403);
             }
             $token = $admin->createToken('admin-token')->plainTextToken;
             return response()->json([
@@ -127,7 +132,8 @@ class AdminAuthController extends Controller
                 'message' => 'OLD password does not match'
             ],400);
         }
-        $admin->update(['password' => $request->new_password]);
+        $admin->password = $request->new_password;
+        $admin->save();
 
         return response()->json([
             'status' => 'success',
@@ -185,7 +191,7 @@ class AdminAuthController extends Controller
             return response()->json(['message' => 'Admin not found'], 404);
         }
         $currentUser = auth('admin')->user();
-        if($currentUser->role === 'super_admin' || $currentUser->id == $id){
+        if($currentUser->role === 'super_admin' || (int)$currentUser->id === (int)$id){
 
             if($admin->image){
                 if(Storage::disk('public')->exists($admin->image)){
