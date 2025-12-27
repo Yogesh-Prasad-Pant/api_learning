@@ -111,17 +111,16 @@ class AdminAuthController extends Controller
 // function for updating the profile image
     public function updateImage(Request $request)
     {
-        $request->validate(['image'=> ['required', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],
-    ]);
-    $admin = $request->user();
-    if ($request->hasFile('image')){
-        if($admin->image && Storage::disk('public')->exists($admin->image)){
-            Storage::disk('public')->delete($admin->image);
+        $request->validate(['image'=> ['required', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],]);
+        $admin = $request->user();
+        if ($request->hasFile('image')){
+            if($admin->image && Storage::disk('public')->exists($admin->image)){
+                Storage::disk('public')->delete($admin->image);
+            }
+            $path = $request->file('image')->store('admins','public');
+            $admin->update(['image'=> $path]);
         }
-        $path = $request->file('image')->store('admins','public');
-        $admin->update(['image'=> $path]);
-    }
-        return response()->json(['status' => 'success', 
+            return response()->json(['status' => 'success', 
                                  'message' =>'Profile image updated successfully',
                                  'image_url' => asset('storage/' . $admin->image),
                                  'logged_in_as_id' => auth('admin')->id()

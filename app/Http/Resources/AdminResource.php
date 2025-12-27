@@ -21,7 +21,7 @@ class AdminResource extends JsonResource
                 'address' => $this->address,
                 'contact_no' => $this->contact_no,
                 'image' =>  $this->image ? asset('storage/'  . str_replace('\\','/', $this->image)) : null,
-                'created_at' => $this->created_at->fromat('Y-m-d'),
+                'created_at' => $this->created_at->format('Y-m-d'),
         ];
     }
 }
