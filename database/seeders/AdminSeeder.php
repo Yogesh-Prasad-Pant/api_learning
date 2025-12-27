@@ -15,9 +15,7 @@ class AdminSeeder extends Seeder
         $admins = [
             [
                 'name' => 'Aarav Sharma',
-                'email' => 'aarav@example.com',
-                'image' => 'admins/default.png',
-                'password' => 'password123',
+                
                 'contact_no' => '9841000001',
                 'address' => 'Kathmandu, Nepal',
                 'role' => 'super_admin', // Overriding default

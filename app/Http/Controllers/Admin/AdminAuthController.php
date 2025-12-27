@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Admin;
 use Illuminate\Support\Facades\Storage;
-
+use Illuminate\Support\Facades\Hash;
 class AdminAuthController extends Controller
 {
     public function index(Request $request){
@@ -19,14 +19,18 @@ class AdminAuthController extends Controller
         })->latest()->paginate(10);
 
         $admins->getCollection()->transform(function ($admin){
-            return['image' => $admin->image ? asset('storage/' . $admin->image) : null,];
+            if($admin->image){
+                 $admin->image = asset('storage/'. str_replace('\\','/',$admin->image));
+            }
+            return $admin;
         });
-        
         return response()->json([
             'status' => 'success',
             'data' => $admins
         ],200);
     }
+
+
     // function for login 
     public function login(Request $request)
     {
@@ -62,7 +66,27 @@ class AdminAuthController extends Controller
     }
 
 
+// function for changing password using old password
+    public function changePassword(Request $request)
+    {
+        $request->validate(['old_password' => 'required',
+                            'new_password' => 'required|min:6|confirmed',
+        ]);
+        $admin = auth()->user();
+        if(!Hash::check($request->old_password, $admin->password)){
+            return response()->json([
+                'status' => 'error',
+                'message' => 'OLD password does not match'
+            ],400);
+        }
+        $admin->update(['password' => $request->new_password]);
 
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Password changed successfully'
+        ]);
+
+    }
 
 // function for updating the admins detail
     public function updateProfile(Request $request){
@@ -80,6 +104,8 @@ class AdminAuthController extends Controller
             'message'=> 'Profile updated Successfully',
             'admin' => $admin],200);
     }
+
+
 // function for updating the profile image
     public function updateImage(Request $request)
     {
@@ -97,4 +123,23 @@ class AdminAuthController extends Controller
                                  'message' =>'Profile image updated successfully',
                                  'image_url' => asset('storage/' . $admin->image)],200);
     }
+
+
+    //Delete admin logic
+    public function deleteAdmin($id){
+        $admin = Admin::find($id);
+        if(!$admin){
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+        if($admin->image){
+            if(Storage::disk('public')->exists($admin->image)){
+                Storage::disk('public')->delete($admin->image);
+            }
+        }
+        $admin->delete();
+        return response()->json(['status'=> 'success',
+                                 'message'=> 'Admin deleted successfully'
+        ]);
+    }
+
 }
