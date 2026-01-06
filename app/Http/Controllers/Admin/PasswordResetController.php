@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
 
 class PasswordResetController extends Controller
 {
+// send reset link     
     public function sendResetLink(Request $request){
         $request->validate(['email'=>'required|email']);
         $admin = Admin::where('email',$request->email)->first();
@@ -27,9 +28,9 @@ class PasswordResetController extends Controller
         );
         $admin->notify(new AdminResetPasswordNotification($token));
         return response()->json(['message' => 'Reset token sent to your email!']);
-    }//
+    }
 
-
+// reset password
     public function resetPassword(Request $request){
        
         $request->validate(['email' => 'required|email',

@@ -7,10 +7,12 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Admin extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, CanResetPassword;
+    use SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -29,6 +31,8 @@ class Admin extends Authenticatable
     ];
 
     protected $casts = [
+        'deleted_at'=>'datetime',
+        'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
     

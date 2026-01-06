@@ -35,6 +35,8 @@ Route::prefix('admin')->group(function (){
     Route::middleware(['auth:sanctum','super_admin'])->group(function(){
         Route::get('/list',[AdminAuthController::class, 'index']);
         Route::post('/change-status/{id}',[AdminAuthController::class, 'changeStatus']);
+        Route::delete('/force-delete/{id}',[AdminAuthController::class, 'forceDeleteAdmin']);
+        Route::post('/restore/{id}',[AdminAuthController::class, 'restoreAdmin']);
     });
 
 });  

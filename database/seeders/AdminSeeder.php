@@ -18,6 +18,7 @@ class AdminSeeder extends Seeder
             'password' => 'password123', 
             'role' => 'super_admin',
             'status' => 'active',
+            'email_verified_at' => now(),
             'contact_no' => '123456789',
             'address' => '123 Super Street, Admin City', // Added address
         ]);

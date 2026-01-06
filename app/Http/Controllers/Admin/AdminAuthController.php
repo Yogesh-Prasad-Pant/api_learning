@@ -31,6 +31,7 @@ class AdminAuthController extends Controller
             $admin->address = $request->address;
             $admin->role = 'admin';
             $admin->status = 'pending';
+            $admin->email_verified_at = null;
             $admin->save();
        
         return response()->json(['message' => 'Your application has been submitted and is waiting for Super Admin approval.'
@@ -51,6 +52,9 @@ class AdminAuthController extends Controller
             return response()->json(['message' => 'You can not suspend or deactive your own super admin account'],400);
         }
         $admin->status = $request->status;
+        if($request->status === 'active' && $admin->email_verified_at === null){
+            $admin->email_verified_at = now();
+        }
         $admin->save();
         return response()->json([
             'status' => 'success',
@@ -62,7 +66,11 @@ class AdminAuthController extends Controller
     //function for showing the admins
     public function index(Request $request)
     {
-        $admins = Admin::query()
+        $query = Admin:: query();
+        if(auth('admin')->user()->role === 'super_admin' && $request->has('only_trashed') ){
+            $query->onlyTrashed();
+        }
+        $admins = $query
              ->when($request->search, function ($query, $search){
                 $query->where(function($q) use ($search){
                     $q->where('name','like',"%{$search}%")
@@ -97,6 +105,9 @@ class AdminAuthController extends Controller
             }
             if ($admin->status === 'suspended') {
                  return response()->json(['message' => 'Your account has been suspended. Please contact the Super Admin.'], 403);
+            }
+            if($admin->email_verified_at == null){
+                return response()->json(['message'=> 'Please verify your email before logging in.'],403);
             }
             $token = $admin->createToken('admin-token')->plainTextToken;
             return response()->json([
@@ -184,7 +195,7 @@ class AdminAuthController extends Controller
     }
 
 
-    //Delete admin logic
+    //Delete admin logic Temporarly
     public function deleteAdmin($id){
         $admin = Admin::find($id);
         if(!$admin){
@@ -192,19 +203,49 @@ class AdminAuthController extends Controller
         }
         $currentUser = auth('admin')->user();
         if($currentUser->role === 'super_admin' || (int)$currentUser->id === (int)$id){
-
-            if($admin->image){
-                if(Storage::disk('public')->exists($admin->image)){
-                    Storage::disk('public')->delete($admin->image);
-                }
-            }
             $admin->delete();
             return response()->json(['status'=> 'success',
-                                 'message'=> 'Account deleted successfully'
+                                 'message'=> 'Account moved to trash (soft Deleted) successfully'
             ]);
         }
         return response()->json(['message' => 'Unauthorized. You can not delete other account'], 403);
         
     }
+
+//Delete admin permanently 
+    public function forceDeleteAdmin($id){
+        $admin = Admin::withTrashed()->find($id);
+        if(!$admin) return response()->json(['message' => 'Admin not found'], 404);
+        if(auth('admin')->user()->role !== 'super_admin') {
+            return response()->json(['message' => 'Only Super Admin can Permanently delete accounts'], 403);
+        }
+        if($admin->image){
+                if(Storage::disk('public')->exists($admin->image)){
+                    Storage::disk('public')->delete($admin->image);
+                }
+            }
+        $admin->forceDelete();
+        return response()->json(['message' => 'Admin and associated data  is permanently deleted ']);
+    }
+
+// Restore a soft-deleted admin
+    public function restoreAdmin($id){
+    
+        $admin = Admin::withTrashed()->find($id);
+        if (!$admin) {
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        if (auth('admin')->user()->role !== 'super_admin') {
+            return response()->json(['message' => 'Unauthorized. Only Super Admin can restore accounts'], 403);
+        }
+        $admin->restore();
+        return response()->json([
+            'status' => 'success',
+            'message' => "Admin {$admin->name} has been restored successfully.",
+            'admin' => new AdminResource($admin)
+        ]);
+    }
+
 
 }
