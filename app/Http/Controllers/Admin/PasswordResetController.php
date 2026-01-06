@@ -23,7 +23,7 @@ class PasswordResetController extends Controller
         $token = Str::random(60);
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $request->email],
-            ['token' => $token, 'created_at'=>now()]
+            ['token' => hash('sha256',$token), 'created_at'=>now()]
         );
         $admin->notify(new AdminResetPasswordNotification($token));
         return response()->json(['message' => 'Reset token sent to your email!']);
@@ -38,7 +38,7 @@ class PasswordResetController extends Controller
                         ]);
         $resetData = DB::table('password_reset_tokens')
                         ->where('email', $request->email)
-                        ->where('token', $request->token)
+                        ->where('token', hash('sha256',$request->token))
                         ->first();
 
         if(!$resetData){

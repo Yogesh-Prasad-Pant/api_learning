@@ -35,7 +35,7 @@ class AdminResetPasswordNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Admin Pssword Reset Request')
+            ->subject('Admin Password Reset Request')
             ->line('Your password reset token is: '.$this->token)
             ->action('Notification Action', url('/'))
             ->line('Use this token in Postman to reset your password.');
