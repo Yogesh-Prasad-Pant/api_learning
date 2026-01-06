@@ -47,7 +47,7 @@ class AdminAuthController extends Controller
         if(!$admin){
             return response()->json(['message' => 'Admin account not found'], 404);
         }
-        if(auth('admin')->id() == $id && $request->status !== 'active'){
+        if((int)auth('admin')->id() === (int)$id && $request->status !== 'active'){
             return response()->json(['message' => 'You can not suspend or deactive your own super admin account'],400);
         }
         $admin->status = $request->status;
@@ -55,27 +55,32 @@ class AdminAuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => "Admin {$admin->name} is now {$request->status}.",
-            'approved_by' => optional(auth('admin')->user())->name ?? 'Super Admin'
+            'approved_by' => auth('admin')->user()->name
         ], 200);
     }
 
-
     //function for showing the admins
-    public function index(Request $request){
-        $admins = Admin::query()->when($request->search, function ($query, $search){
-            $query->where(function($q) use ($search){
-                $q->where('name','like',"%{$search}%")
-                ->orWhere('email','like',"%{$search}%");
-            });
-        })->latest()->paginate(10);
+    public function index(Request $request)
+    {
+        $admins = Admin::query()
+             ->when($request->search, function ($query, $search){
+                $query->where(function($q) use ($search){
+                    $q->where('name','like',"%{$search}%")
+                    ->orWhere('email','like',"%{$search}%")
+                    ->orWhere('contact_no', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->status, function ($qu,$status){
+                $qu->where('status', $status);
+            })
+            ->latest()->paginate(10);
 
          
-        return response()->json([
+        return AdminResource::collection($admins)->additional([
             'status' => 'success',
-            'data' => AdminResource::collection($admins)->response()->getData(true)
-        ],200);
+            'search_query' => $request->search
+        ]);
     }
-
 
     // function for login 
     public function login(Request $request)
@@ -84,9 +89,8 @@ class AdminAuthController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
-
-        if (Auth::guard('admin')->attempt($credentials, $request->remember)) {
-            $admin = Auth::guard('admin')->user();
+        $admin = Admin::where('email', $request->email)->first();
+        if ($admin && Hash::check($request->password, $admin->password)) {
             if($admin->status === 'pending'){
                 return response()->json(['message' => 'Access Denied. Your account status is: ' . $admin->status . '. Please wait for approval.'
             ], 403);
@@ -98,7 +102,7 @@ class AdminAuthController extends Controller
             return response()->json([
                 'message' => 'Login successful',
                 'token' => $token,
-                'admin' => $admin
+                'admin' => new AdminResource($admin),
             ], 200);
         }
 
@@ -107,17 +111,14 @@ class AdminAuthController extends Controller
         ], 401);
     }
 
-
-
 // function for logout
     public function logout(Request $request)
     {
-       if($request->user()){
-        $request->user()->currentAccessToken()->delete();
+       if(auth('admin')->check()){
+        auth('admin')->user()->currentAccessToken()->delete();
        }
         return response()->json(['message' => 'Logged out successfully']);
     }
-
 
 // function for changing password using old password
     public function changePassword(Request $request)
@@ -147,7 +148,7 @@ class AdminAuthController extends Controller
 // function for updating the admins detail
     public function updateProfile(Request $request){
 
-        $admin = $request->user(); 
+        $admin = auth('admin')->user(); 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'contact_no' => ['sometimes', 'string', 'max:15'],
@@ -158,8 +159,7 @@ class AdminAuthController extends Controller
         $admin->refresh();
         return response()->json([
             'message'=> 'Profile updated Successfully',
-            'admin' => $admin,
-            'logged_in_as_id' => auth('admin')->id()
+            'admin' => new AdminResource($admin)
         ],200);
     }
 
@@ -168,7 +168,7 @@ class AdminAuthController extends Controller
     public function updateImage(Request $request)
     {
         $request->validate(['image'=> ['required', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],]);
-        $admin = $request->user();
+        $admin = auth('admin')->user();
         if ($request->hasFile('image')){
             if($admin->image && Storage::disk('public')->exists($admin->image)){
                 Storage::disk('public')->delete($admin->image);
