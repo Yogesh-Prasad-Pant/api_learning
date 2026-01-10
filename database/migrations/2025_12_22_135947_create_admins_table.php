@@ -17,11 +17,26 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('image')->nullable();
+
             $table->string('role')->default('admin'); 
-            $table->enum('status', ['pending', 'active', 'suspended'])->default('pending'); 
-            $table->string('contact_no');
+            $table->enum('status', ['pending', 'active', 'suspended'])->default('pending')->index(); 
+            $table->enum('kyc_status', ['not_submitted', 'pending', 'verified', 'rejected'])->default('not_submitted')->index();
+            $table->boolean('is_verified')->default(false)->index();
+            
+            $table->string('contact_no')->nullable();
             $table->text('address')->nullable();
+
+            $table->string('id_proof_type')->nullable();
+            $table->string('id_proof_path')->nullable();
+            $table->string('business_license_path')->nullable();
+            $table->text('kyc_notes')->nullable(); 
+
             $table->string('password');
+            $table->ipAddress('last_login_ip')->nullable();
+            $table->timestamp('last_login_at')->nullable();
+
+            $table->string('referred_by')->nullable();
+            
             $table->rememberToken();
             $table->softDeletes();
             $table->timestamps();
