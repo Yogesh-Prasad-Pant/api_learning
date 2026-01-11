@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('category_id')->constrained()->onDelete('cascade');
-            $table->unsignedBigInteger('brand_id')->nullable()->index();
-
+            $table->foreignId('category_id')->constrained('categories')->onDelete('cascade');
+            $table->foreignId('brand_id')->nullable()->constrained('brands')->onDelete('set null');
+            
             $table->string('name')->index(); 
             $table->string('slug')->unique();
             $table->string('sku')->nullable()->unique();// sku = stock keepinng unit Global identifier for product in multiple shops;

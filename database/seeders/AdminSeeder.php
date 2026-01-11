@@ -12,26 +12,49 @@ class AdminSeeder extends Seeder
      */
     public function run(): void
     {
+       // 1. THE SUPERADMIN
         Admin::create([
-            'name' => 'Super Admin User',
-            'email' => 'superadmin@example.com',
-            'password' => 'password123', 
-            'role' => 'super_admin',
-            'status' => 'active',
+            'name' => 'Main Superadmin',
+            'email' => 'super@marketplace.com',
             'email_verified_at' => now(),
-            'contact_no' => '123456789',
-            'address' => '123 Super Street, Admin City', // Added address
+            'password' => 'superpassword',
+            'role' => 'superadmin',
+            'status' => 'active',
+            'kyc_status' => 'verified',
+            'is_verified' => true,
+            'contact_no' => '9801112223',
         ]);
 
-        // 2. Create a Regular Admin
+        // 2. VENDOR ONE: Already Active & Verified
         Admin::create([
-            'name' => 'Regular Admin User',
-            'email' => 'admin@example.com',
+            'name' => 'Electronics Expert',
+            'email' => 'vendor1@shop.com',
+            'email_verified_at' => now(),
+            'password' => 'password123',
+            'role' => 'admin',
+            'status' => 'active',
+            'kyc_status' => 'verified',
+            'is_verified' => true,
+            'contact_no' => '9841000001',
+            'address' => 'New Road, Kathmandu',
+            'id_proof_type' => 'Citizenship',
+            'id_proof_path' => 'kyc/id_proofs/vendor1.jpg',
+        ]);
+
+        // 3. VENDOR TWO: New & Pending (To test Superadmin approval)
+        Admin::create([
+            'name' => 'Fashion Forward',
+            'email' => 'vendor2@shop.com',
+            'email_verified_at' => now(),
             'password' => 'password123',
             'role' => 'admin',
             'status' => 'pending',
-            'contact_no' => '987654321',
-            'address' => '456 Regular Ave, User Town', // Added address
+            'kyc_status' => 'pending',
+            'is_verified' => false,
+            'contact_no' => '9841000002',
+            'address' => 'Baneshwor, Kathmandu',
+            'id_proof_type' => 'Passport',
+            'id_proof_path' => 'kyc/id_proofs/vendor2.jpg',
         ]);
        
         
