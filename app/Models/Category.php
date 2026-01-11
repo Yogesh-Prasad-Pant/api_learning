@@ -45,7 +45,8 @@ class Category extends Model
         
         // Auto-calculate depth
         if ($category->parent_id) {
-            $category->depth = $category->parent->depth + 1;
+            $parentDepth = static::where('id', $category->parent_id)->value('depth');
+            $category->depth = ($parentDepth ?? 0) + 1;
         }
     });
 }

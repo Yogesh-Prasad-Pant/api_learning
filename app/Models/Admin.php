@@ -57,7 +57,7 @@ class Admin extends Authenticatable
 
      public function isVerified(): bool
         {
-            return $this->kyc_status === 'verified' && $this->status === 'active';
+            return $this->kyc_status === 'verified';
         }
     public function canOperate(): bool
     {

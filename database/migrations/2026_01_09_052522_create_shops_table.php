@@ -34,6 +34,7 @@ return new class extends Migration
             $table->enum( 'status', ['pending', 'active', 'inactive', 'suspended'])->default('pending')->index();
             $table->boolean('is_featured')->default(false);
             $table->boolean('is_open')->default(true);
+            $table->json('opening_hours')->nullable();
 
             $table->decimal('rating',3, 2)->default(0.00);
             $table->integer('reviews_count')->default(0);

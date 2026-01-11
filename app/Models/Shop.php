@@ -22,6 +22,7 @@ class Shop extends Model
         'address', 
         'status', 
         'is_open',
+        'opening_hours',
         // 'is_featured', 
         // 'rating',
         'social_links',
@@ -32,8 +33,9 @@ class Shop extends Model
         'longitude',];
 
     protected $casts = [ 'social_links' => 'array',
-                         'commission_rate' => 'float',
-                         'balance' => 'float',
+                        'opening_hours' => 'array',
+                        'commission_rate' => 'float',
+                        'balance' => 'float',
                         'is_featured' => 'boolean',
                         'is_open' => 'boolean',
                         'rating' => 'float',
