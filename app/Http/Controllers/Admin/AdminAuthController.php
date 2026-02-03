@@ -39,57 +39,6 @@ class AdminAuthController extends Controller
 
     }
 
-    // function for Super Admin to approve a pending account
-    public function changeStatus(Request $request, $id)
-    {   
-        $request->validate(['status' => 'required|in:active,pending,suspended']);
-
-        $admin = Admin::find($id);
-        if(!$admin){
-            return response()->json(['message' => 'Admin account not found'], 404);
-        }
-        if((int)auth('admin')->id() === (int)$id && $request->status !== 'active'){
-            return response()->json(['message' => 'You can not suspend or deactive your own super admin account'],400);
-        }
-        $admin->status = $request->status;
-        if($request->status === 'active' && $admin->email_verified_at === null){
-            $admin->email_verified_at = now();
-        }
-        $admin->save();
-        return response()->json([
-            'status' => 'success',
-            'message' => "Admin {$admin->name} is now {$request->status}.",
-            'approved_by' => auth('admin')->user()->name
-        ], 200);
-    }
-
-    //function for showing the admins
-    public function index(Request $request)
-    {
-        $query = Admin:: query();
-        if(auth('admin')->user()->role === 'super_admin' && $request->has('only_trashed') ){
-            $query->onlyTrashed();
-        }
-        $admins = $query
-             ->when($request->search, function ($query, $search){
-                $query->where(function($q) use ($search){
-                    $q->where('name','like',"%{$search}%")
-                    ->orWhere('email','like',"%{$search}%")
-                    ->orWhere('contact_no', 'like', "%{$search}%");
-                });
-            })
-            ->when($request->status, function ($qu,$status){
-                $qu->where('status', $status);
-            })
-            ->latest()->paginate(10);
-
-         
-        return AdminResource::collection($admins)->additional([
-            'status' => 'success',
-            'search_query' => $request->search
-        ]);
-    }
-
     // function for login 
     public function login(Request $request)
     {
@@ -189,62 +138,9 @@ class AdminAuthController extends Controller
         }
             return response()->json(['status' => 'success', 
                                  'message' =>'Profile image updated successfully',
-                                 'image_url' => asset('storage/' . $admin->image),
+                                 'image_url' => asset('storage/' . $path),
                                  'logged_in_as_id' => auth('admin')->id()
                                 ],200);
-    }
-
-
-    //Delete admin logic Temporarly
-    public function deleteAdmin($id){
-        $admin = Admin::find($id);
-        if(!$admin){
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-        $currentUser = auth('admin')->user();
-        if($currentUser->role === 'super_admin' || (int)$currentUser->id === (int)$id){
-            $admin->delete();
-            return response()->json(['status'=> 'success',
-                                 'message'=> 'Account moved to trash (soft Deleted) successfully'
-            ]);
-        }
-        return response()->json(['message' => 'Unauthorized. You can not delete other account'], 403);
-        
-    }
-
-//Delete admin permanently 
-    public function forceDeleteAdmin($id){
-        $admin = Admin::withTrashed()->find($id);
-        if(!$admin) return response()->json(['message' => 'Admin not found'], 404);
-        if(auth('admin')->user()->role !== 'super_admin') {
-            return response()->json(['message' => 'Only Super Admin can Permanently delete accounts'], 403);
-        }
-        if($admin->image){
-                if(Storage::disk('public')->exists($admin->image)){
-                    Storage::disk('public')->delete($admin->image);
-                }
-            }
-        $admin->forceDelete();
-        return response()->json(['message' => 'Admin and associated data  is permanently deleted ']);
-    }
-
-// Restore a soft-deleted admin
-    public function restoreAdmin($id){
-    
-        $admin = Admin::withTrashed()->find($id);
-        if (!$admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
-        if (auth('admin')->user()->role !== 'super_admin') {
-            return response()->json(['message' => 'Unauthorized. Only Super Admin can restore accounts'], 403);
-        }
-        $admin->restore();
-        return response()->json([
-            'status' => 'success',
-            'message' => "Admin {$admin->name} has been restored successfully.",
-            'admin' => new AdminResource($admin)
-        ]);
     }
 
 
