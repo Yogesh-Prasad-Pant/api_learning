@@ -4,40 +4,36 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\PasswordResetController;
-
+use App\Http\Controllers\Admin\AdminManagementController;
 
 Route::prefix('admin')->group(function (){
 
-// public route for register admin and login
-    Route::middleware('throttle:5,1')->group(function (){
-        Route::post('/register-request',[AdminAuthController::class, 'registerRequest']);
-        Route::post('/login', [AdminAuthController::class, 'login']);
-    });
-
-    
-// password forget/reset route
-    Route::middleware('throttle:3,1')->group(function(){
-        Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink']);
-        Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
-    });
-
-// protected routes for viewing  searching and updating profile and  logout
-    Route::middleware('auth:sanctum')->group(function (){
-        Route::post('/logout',[AdminAuthController::class, 'logout']);
-        Route::post('/change-password', [AdminAuthController::class, 'changePassword']);
-        Route::put('/update',[AdminAuthController::class, 'updateProfile']);
-        Route::post('/update-image',[AdminAuthController::class, 'updateImage']);
-        // route for delteing own id and super admin can only delete other id
-        Route::delete('/delete/{id}',[AdminAuthController::class, 'deleteAdmin']);
-     });
-
-// Routes that only super_admin can access
-    Route::middleware(['auth:sanctum','super_admin'])->group(function(){
-        Route::get('/list',[AdminAuthController::class, 'index']);
-        Route::post('/change-status/{id}',[AdminAuthController::class, 'changeStatus']);
-        Route::delete('/force-delete/{id}',[AdminAuthController::class, 'forceDeleteAdmin']);
-        Route::post('/restore/{id}',[AdminAuthController::class, 'restoreAdmin']);
-    });
+    // public route for register admin and login
+        Route::middleware('throttle:5,1')->group(function (){
+            Route::post('/register-request',[AdminAuthController::class, 'registerRequest']);
+            Route::post('/login', [AdminAuthController::class, 'login']);
+        });
+    // password forget/reset route
+        Route::middleware('throttle:3,1')->group(function(){
+            Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink']);
+            Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
+        });
+    // protected routes for viewing  searching and updating profile and  logout
+        Route::middleware('auth:sanctum')->group(function (){
+            Route::post('/logout',[AdminAuthController::class, 'logout']);
+            Route::post('/change-password', [AdminAuthController::class, 'changePassword']);
+            Route::put('/update',[AdminAuthController::class, 'updateProfile']);
+            Route::post('/update-image',[AdminAuthController::class, 'updateImage']);
+            Route::delete('/delete',[AdminManagementController::class, 'deleteAdmin']);
+            });
+    // Routes that only super_admin can access
+        Route::middleware(['auth:sanctum','super_admin'])->group(function(){
+            Route::get('/list',[AdminManagementController::class, 'index']);
+            Route::post('/change-status/{id}',[AdminManagementController::class, 'changeStatus']);
+            Route::delete('/delete/{id}',[AdminManagementController::class, 'deleteAdmin']);
+            Route::delete('/force-delete/{id}',[AdminManagementController::class, 'forceDeleteAdmin']);
+            Route::post('/restore/{id}',[AdminManagementController::class, 'restoreAdmin']);
+        });
 
 });  
 

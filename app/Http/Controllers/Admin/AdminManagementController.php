@@ -62,19 +62,20 @@ class AdminManagementController extends Controller
     }
 
     //Delete admin logic Temporarly
-    public function deleteAdmin($id)
+    public function deleteAdmin(Request $request,$id = null)
     {
         $currentUser = auth('admin')->user();
-        $admin = Admin::find($id);
+        $targetId = $id ?? $currentUser->id;
+        $admin = Admin::find($targetId);
         if(!$admin){
             return response()->json(['message' => 'Account not found'], 404);
         }
         
-        if($currentUser->role === 'super_admin' && (int)$currentUser->id === (int)$id){
+        if($currentUser->role === 'super_admin' && (int)$currentUser->id === (int)$targetId){
             return response()->json(['message' => 'Super admins can not delete themselves'], 403);  
         }
 
-        if($currentUser->role !== 'super_admin' && (int)$currentUser->id !== (int)$id){
+        if($currentUser->role !== 'super_admin' && (int)$currentUser->id !== (int)$targetId){
             return response()->json(['message' => 'Unauthorized. You can not delete other account'], 403);
         }
 
@@ -91,6 +92,13 @@ class AdminManagementController extends Controller
         }
         
         $admin->delete();
+        if((int)$currentUser->id === (int)$targetId){
+            $currentUser->tokens()->delete();
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Your account has been deactivated and you have been logged out.'
+            ]);
+        }
         return response()->json(['status'=> 'success',
                                  'message'=> 'Account moved to trash (soft Deleted) successfully'
             ]);    
