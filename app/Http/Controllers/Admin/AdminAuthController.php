@@ -39,6 +39,33 @@ class AdminAuthController extends Controller
 
     }
 
+    //function for uploading kyc
+    public function uploadKyc(Request $request)
+    {
+        $request->validate(['id_proof' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',]);
+        $admin = auth('admin')->user();
+        if($request->kyc_status === 'verified'){
+            return response()->json(['message' => 'your KYC is already verified. Contact support to change it.'], 403);
+        }
+        if($request->hasFile('id_proof')){
+            if($admin->id_proof_path){
+                Storage::disk('private')->delete($admin->id_proof_path);
+            }
+           $fileName = 'kyc_' . $admin->id . '_' . time() . '.' . $request->file('id_proof')->getClientOriginalExtension();
+           $path = $request->file('id_proof')->storeAs('kyc_documents', $fileName, 'private');
+
+            $admin->update([
+                'id_proof_path' => $path,
+                'kyc_status' => 'pending',
+            ]);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'KYC document uploaded successfully. Verification is now pending.'
+            ]);
+        }
+        return response()->json(['message' => 'File upload failed.'], 400);
+
+    }
     // function for login 
     public function login(Request $request)
     {

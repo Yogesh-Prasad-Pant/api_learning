@@ -25,6 +25,7 @@ Route::prefix('admin')->group(function (){
             Route::put('/update',[AdminAuthController::class, 'updateProfile']);
             Route::post('/update-image',[AdminAuthController::class, 'updateImage']);
             Route::delete('/delete',[AdminManagementController::class, 'deleteAdmin']);
+            Route::post('/upload-kyc', [AdminAuthController::class, 'uploadKyc']);
             });
     // Routes that only super_admin can access
         Route::middleware(['auth:sanctum','super_admin'])->group(function(){
