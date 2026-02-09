@@ -9,6 +9,7 @@ use App\Models\Admin;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Resources\AdminResource;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 
 class AdminAuthController extends Controller
@@ -39,33 +40,61 @@ class AdminAuthController extends Controller
 
     }
 
-    //function for uploading kyc
+    //function for uploading kyc and business lisence
     public function uploadKyc(Request $request)
     {
-        $request->validate(['id_proof' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',]);
         $admin = auth('admin')->user();
-        if($request->kyc_status === 'verified'){
-            return response()->json(['message' => 'your KYC is already verified. Contact support to change it.'], 403);
+
+        $request->validate([
+            'id_proof'         => ($admin->id_proof_path ? 'nullable' : 'required') . '|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'business_license' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'id_proof_type'    => ($admin->id_proof_path ? 'nullable' : 'required') . '|string',
+        ]);
+
+   
+        if (in_array($admin->kyc_status, ['pending', 'verified'])) {
+            return response()->json([
+                'message' => "Action denied. Your KYC is currently {$admin->kyc_status}. You can only re-upload if rejected."
+            ], 403);
         }
-        if($request->hasFile('id_proof')){
-            if($admin->id_proof_path){
+
+        $updateData = [];
+        $hasChanged = false;
+
+   
+        if ($request->hasFile('id_proof')) {
+            if ($admin->id_proof_path) {
                 Storage::disk('private')->delete($admin->id_proof_path);
             }
-           $fileName = 'kyc_' . $admin->id . '_' . time() . '.' . $request->file('id_proof')->getClientOriginalExtension();
-           $path = $request->file('id_proof')->storeAs('kyc_documents', $fileName, 'private');
+            $fileName = 'kyc_' . $admin->id . '_' . time() . '.' . $request->file('id_proof')->getClientOriginalExtension();
+            $updateData['id_proof_path'] = $request->file('id_proof')->storeAs('kyc_documents', $fileName, 'private');
+            $updateData['id_proof_type'] = $request->id_proof_type;
+            $hasChanged = true;
+        }
 
-            $admin->update([
-                'id_proof_path' => $path,
-                'kyc_status' => 'pending',
-            ]);
+   
+        if ($request->hasFile('business_license')) {
+            if ($admin->business_license_path) {
+                Storage::disk('private')->delete($admin->business_license_path);
+            }
+            $fileName = 'license_' . $admin->id . '_' . time() . '.' . $request->file('business_license')->getClientOriginalExtension();
+            $updateData['business_license_path'] = $request->file('business_license')->storeAs('kyc_documents/license', $fileName, 'private');
+            $hasChanged = true;
+        }
+
+  
+        if ($hasChanged) {
+            $updateData['kyc_status'] = 'pending'; 
+            $admin->update($updateData);
+
             return response()->json([
-                'status' => 'success',
-                'message' => 'KYC document uploaded successfully. Verification is now pending.'
+                'status'  => 'success',
+                'message' => 'Documents uploaded successfully. Verification is now pending.'
             ]);
         }
-        return response()->json(['message' => 'File upload failed.'], 400);
-
+        return response()->json(['message' => 'No new files provided.'], 400);
     }
+
     // function for login 
     public function login(Request $request)
     {

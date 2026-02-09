@@ -29,9 +29,11 @@ Route::prefix('admin')->group(function (){
             });
     // Routes that only super_admin can access
         Route::middleware(['auth:sanctum','super_admin'])->group(function(){
-            Route::get('/list',[AdminManagementController::class, 'index']);
+            Route::get('/list',[AdminManagementController::class, 'index'])->name('admin.index');
+            Route::get('/kyc/view/{id}/{type}', [AdminManagementController::class, 'viewDocument'])->name('admin.kyc.view');
+            Route::post('/kyc/change-status/{id}', [AdminManagementController::class, 'changeKycStatus'])->name('asmin.kyc.status');
             Route::post('/change-status/{id}',[AdminManagementController::class, 'changeStatus']);
-            Route::delete('/delete/{id}',[AdminManagementController::class, 'deleteAdmin']);
+            Route::delete('/delete/{id}',[AdminManagementController::class, 'deleteAdmin'])->name('admin.delete');
             Route::delete('/force-delete/{id}',[AdminManagementController::class, 'forceDeleteAdmin']);
             Route::post('/restore/{id}',[AdminManagementController::class, 'restoreAdmin']);
         });

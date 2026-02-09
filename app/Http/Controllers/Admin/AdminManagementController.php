@@ -13,20 +13,23 @@ class AdminManagementController extends Controller
       //function for showing the admins
     public function index(Request $request)
     {
-        $query = Admin:: query();
+        $query = Admin::query();
         if(auth('admin')->user()->role === 'super_admin' && $request->has('only_trashed') ){
             $query->onlyTrashed();
         }
         $admins = $query
              ->when($request->search, function ($query, $search){
-                $query->where(function($q) use ($search){
-                    $q->where('name','like',"%{$search}%")
+                $query->where(function($inner) use ($search){
+                    $inner->where('name','like',"%{$search}%")
                     ->orWhere('email','like',"%{$search}%")
                     ->orWhere('contact_no', 'like', "%{$search}%");
                 });
             })
-            ->when($request->status, function ($qu,$status){
-                $qu->where('status', $status);
+            ->when($request->status, function ($q,$status){
+                $q->where('status', $status);
+            })
+            ->when($request->kyc_status, function ($q, $kyc_status){
+                $q->where('kyc_status', $kyc_status);
             })
             ->latest()->paginate(10);
 
@@ -34,6 +37,73 @@ class AdminManagementController extends Controller
         return AdminResource::collection($admins)->additional([
             'status' => 'success',
             'search_query' => $request->search
+        ]);
+    }
+
+    //function to view business  license
+    public function viewBusinessLIcense($id)
+    {
+        $admin = Admin::findOrFail($id);
+
+        if(!$admin->business_license_path || !Storage::disk('private')->exists($admin->business_license_path)){
+            return response()->json(['message'=> 'Business License not found.'], 404);
+        }
+        return Storage::disk('private')->response($admin->business_license_path);
+    }
+
+    //function to  view kyc document
+    public function viewDocument($id, $type)
+    {   
+        $documentMap = [
+            'id_proof' => 'id_proof_path',
+            'license' => 'business_license_path',
+        ];
+        if(!isset($documentMap[$type])){
+            return response()->json(['message' => 'Invalid document type.'], 404);
+        }
+        $admin = Admin::findOrFail($id);
+        $path = $admin->{$documentMap[$type]};
+
+        if(!$path || !Storage::disk('private')->exists($path)){
+            return response()->json(['message' => 'Document not found'], 404);
+        }
+        $mimeType = Storage::disk('private')->mimeType($path);
+        return Storage::disk('private')->response($path, null, [
+            'Content-type' => $mimeType, 
+            'Content-Disposition' => 'inline'
+        ]);
+
+    }
+
+    // function to change kyc status
+    public function changeKycStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:verified,rejected,pending',
+            'reason' => 'required_if:status,rejected|string|max:255|nullable',
+        ]);
+        $admin = Admin::findOrFail($id);
+        $updateData = [
+            'kyc_status' => $request->status,
+            'kyc_notes' => $request->status === 'rejected' ? $request->reason : null,
+        ];
+
+        if($request->status === 'verified'){
+           $updateData['status'] = 'active';
+           $updateData['is_verified'] = true;
+        }else {
+            $updateData['is_verified'] = false;
+        }
+
+        $admin->update($updateData);
+        $admin->notify(new KycStatusUpdated($admin->kyc_status, $admin->kyc_notes));
+        return response()->json([
+            'status' => 'success',
+            'message' => "KYC status updated to {$request->status} successfully.",
+            'data' => [
+                'admin_id' => $admin->id,
+                'kyc_status' => $admin->kyc_status
+            ]
         ]);
     }
 
