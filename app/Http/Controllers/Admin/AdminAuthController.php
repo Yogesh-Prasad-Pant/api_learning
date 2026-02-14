@@ -46,38 +46,40 @@ class AdminAuthController extends Controller
         $admin = auth('admin')->user();
 
         $request->validate([
-            'id_proof'         => ($admin->id_proof_path ? 'nullable' : 'required') . '|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'id_proof'         => ($admin->id_proof_path ? 'nullable' : 'required_without:business_license') . '|file|mimes:jpg,jpeg,png,pdf|max:2048',
             'business_license' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'id_proof_type'    => ($admin->id_proof_path ? 'nullable' : 'required') . '|string',
+            'id_proof_type'    => ($admin->id_proof_path ? 'nullable' : 'required_with:id_proof') . '|string|max:50',
         ]);
 
    
-        if (in_array($admin->kyc_status, ['pending', 'verified'])) {
-            return response()->json([
-                'message' => "Action denied. Your KYC is currently {$admin->kyc_status}. You can only re-upload if rejected."
-            ], 403);
+        if ($admin->kyc_status !== 'rejected' && $admin->kyc_status !== 'not_submitted' && $admin->kyc_status !== null) {
+            if($request->hasFile('id_proof')&& $admin->id_proof_path){
+                return response()->json(['message' => "ID Proof is already {$admin->kyc_status}. Changes blocked."], 403);
+            }
+            if($request->hasFile('business_license') && $admin->business_license_path){
+                return response()->json(['message' => "Business License is already {$admin->kyc_status}. Changes blocked."],403);
+            }
         }
 
         $updateData = [];
         $hasChanged = false;
 
-   
-        if ($request->hasFile('id_proof')) {
+        if ($request->hasFile('id_proof') && $request->file('id_proof')->isValid()) {
             if ($admin->id_proof_path) {
                 Storage::disk('private')->delete($admin->id_proof_path);
             }
-            $fileName = 'kyc_' . $admin->id . '_' . time() . '.' . $request->file('id_proof')->getClientOriginalExtension();
+            $fileName = 'kyc_' . $admin->id . '_' . bin2hex(random_bytes(8)) . '.' . $request->file('id_proof')->getClientOriginalExtension();
             $updateData['id_proof_path'] = $request->file('id_proof')->storeAs('kyc_documents', $fileName, 'private');
             $updateData['id_proof_type'] = $request->id_proof_type;
             $hasChanged = true;
         }
 
    
-        if ($request->hasFile('business_license')) {
+        if ($request->hasFile('business_license') && $request->file('business_license')->isValid()) {
             if ($admin->business_license_path) {
                 Storage::disk('private')->delete($admin->business_license_path);
             }
-            $fileName = 'license_' . $admin->id . '_' . time() . '.' . $request->file('business_license')->getClientOriginalExtension();
+            $fileName = 'license_' . $admin->id . '_' . bin2hex(random_bytes(8)) . '.' . $request->file('business_license')->getClientOriginalExtension();
             $updateData['business_license_path'] = $request->file('business_license')->storeAs('kyc_documents/license', $fileName, 'private');
             $hasChanged = true;
         }
@@ -85,12 +87,18 @@ class AdminAuthController extends Controller
   
         if ($hasChanged) {
             $updateData['kyc_status'] = 'pending'; 
-            $admin->update($updateData);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Documents uploaded successfully. Verification is now pending.'
-            ]);
+            $updateData['is_verified'] = false;
+            foreach($updateData as $key => $value){
+                $admin->{$key} = $value;
+            }
+            if($admin->save()){
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Documents uploaded successfully. Verification is now pending.'
+                ]);
+            }else{
+                return response()->json(['message' => 'Database save failed.'], 500);
+            }
         }
         return response()->json(['message' => 'No new files provided.'], 400);
     }

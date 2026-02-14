@@ -33,11 +33,11 @@ class AdminResource extends JsonResource
 
                 // Secure Document URLs
                 'id_proof_url' => $this->id_proof_path
-                    ? route('admin.kyc.view', ['id' => $this->id])
+                    ? route('admin.kyc.view', ['id' => $this->id, 'type' => 'id_proof'])
                     : null,
     
-                'business_license_url' => $this->business_license_path // Fixed spelling here
-                    ? route('admin.kyc.license.view', ['id' => $this->id, 'type' => 'license'])
+                'business_license_url' => $this->business_license_path 
+                    ? route('admin.kyc.view', ['id' => $this->id, 'type' => 'license'])
                     : null,
 
                 'deleted_at' => $this->deleted_at ? $this->deleted_at->format('Y-m-d') : null,

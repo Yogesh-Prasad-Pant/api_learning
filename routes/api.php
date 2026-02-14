@@ -19,7 +19,7 @@ Route::prefix('admin')->group(function (){
             Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
         });
     // protected routes for viewing  searching and updating profile and  logout
-        Route::middleware('auth:sanctum')->group(function (){
+        Route::middleware('auth:admin')->group(function (){
             Route::post('/logout',[AdminAuthController::class, 'logout']);
             Route::post('/change-password', [AdminAuthController::class, 'changePassword']);
             Route::put('/update',[AdminAuthController::class, 'updateProfile']);
@@ -28,10 +28,10 @@ Route::prefix('admin')->group(function (){
             Route::post('/upload-kyc', [AdminAuthController::class, 'uploadKyc']);
             });
     // Routes that only super_admin can access
-        Route::middleware(['auth:sanctum','super_admin'])->group(function(){
+        Route::middleware(['auth:admin','super_admin'])->group(function(){
             Route::get('/list',[AdminManagementController::class, 'index'])->name('admin.index');
             Route::get('/kyc/view/{id}/{type}', [AdminManagementController::class, 'viewDocument'])->name('admin.kyc.view');
-            Route::post('/kyc/change-status/{id}', [AdminManagementController::class, 'changeKycStatus'])->name('asmin.kyc.status');
+            Route::post('/kyc/change-status/{id}', [AdminManagementController::class, 'changeKycStatus'])->name('admin.kyc.status');
             Route::post('/change-status/{id}',[AdminManagementController::class, 'changeStatus']);
             Route::delete('/delete/{id}',[AdminManagementController::class, 'deleteAdmin'])->name('admin.delete');
             Route::delete('/force-delete/{id}',[AdminManagementController::class, 'forceDeleteAdmin']);

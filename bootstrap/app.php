@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\IsSuperAdmin;
+use Illuminate\Http\Request;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -13,8 +14,20 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['super_admin' => IsSuperAdmin::class,]);
+        $middleware->redirectTo(
+        guests: fn (Request $request) => $request->expectsJson() || $request->is('api/*') 
+            ? null 
+            : route('login')
+        );
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
+        $exceptions->shouldRenderJsonWhen(function (Request $request, Throwable $e) {
+            if ($request->is('api/*')) {
+                return true;
+            }
+            return $request->expectsJson();
+        });
+        
     })->create();

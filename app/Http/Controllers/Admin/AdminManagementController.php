@@ -7,6 +7,7 @@ use App\Models\Admin;
 use App\Http\Resources\AdminResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Notifications\KycStatusUpdated;
 
 class AdminManagementController extends Controller
 {
@@ -95,7 +96,10 @@ class AdminManagementController extends Controller
             $updateData['is_verified'] = false;
         }
 
-        $admin->update($updateData);
+        foreach($updateData as $key => $value){
+            $admin->{$key} = $value;
+        }
+        $admin->save();
         $admin->notify(new KycStatusUpdated($admin->kyc_status, $admin->kyc_notes));
         return response()->json([
             'status' => 'success',
