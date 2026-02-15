@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\AdminManagementController;
+use App\Http\Controllers\Admin\DashboardController;
 
 Route::prefix('admin')->group(function (){
 
@@ -27,6 +28,10 @@ Route::prefix('admin')->group(function (){
             Route::delete('/delete',[AdminManagementController::class, 'deleteAdmin']);
             Route::post('/upload-kyc', [AdminAuthController::class, 'uploadKyc']);
             });
+    //routes for only active admins
+        Route::middleware(['auth:admin', 'is_active'])->group(function (){
+            Route::get('/dashboard', [DashboardController::class, 'index']);
+        });
     // Routes that only super_admin can access
         Route::middleware(['auth:admin','super_admin'])->group(function(){
             Route::get('/list',[AdminManagementController::class, 'index'])->name('admin.index');
