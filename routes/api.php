@@ -30,11 +30,14 @@ Route::prefix('admin')->group(function (){
             Route::post('/update-image',[AdminAuthController::class, 'updateImage']);
             Route::delete('/delete',[AdminManagementController::class, 'deleteAdmin']);
             Route::post('/upload-kyc', [AdminAuthController::class, 'uploadKyc']);
-        });
-    //routes for only active admins
-        Route::middleware(['auth:admin', 'is_active'])->group(function ()
-        {
-            Route::get('/dashboard', [DashboardController::class, 'index']);
+            Route::prefix('dashboard')->group(function()
+            {
+                Route::get('/index', [DashboardController::class, 'index']);
+                Route::get('/stats', [DashboardController::class, 'getStats']);
+                Route::get('/chart', [DashboardController::class, 'getChartData']);
+                Route::get('/orders', [DashboardController::class, 'getRecenOrders']);
+                Route::get('/shop/{id}/toggle-status',[DashBoardController::class, 'toggleShopStatus']);
+            });
         });
     // Routes that only super_admin can access
         Route::middleware(['auth:admin','super_admin'])->group(function()

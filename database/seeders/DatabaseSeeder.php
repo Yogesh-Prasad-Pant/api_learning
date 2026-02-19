@@ -17,12 +17,14 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
     $this->call([
+            UserSeeder::class,
             AdminSeeder::class,
             ShopSeeder::class,
             CategorySeeder::class,
             BrandSeeder::class,
             ProductSeeder::class,
-            ProductShopSeeder::class, // <--- MAKE SURE THIS LINE EXISTS
+            ProductShopSeeder::class,
+            OrderSeeder::class, // <--- MAKE SURE THIS LINE EXISTS
         ]);
         User::factory()->create([
             'name' => 'Test User',
