@@ -36,7 +36,7 @@ Route::prefix('admin')->group(function (){
                 Route::get('/stats', [DashboardController::class, 'getStats']);
                 Route::get('/chart', [DashboardController::class, 'getChartData']);
                 Route::get('/orders', [DashboardController::class, 'getRecenOrders']);
-                Route::get('/shop/{id}/toggle-status',[DashBoardController::class, 'toggleShopStatus']);
+                Route::get('/shop/{id}/toggle-status',[DashboardController::class, 'toggleShopStatus']);
             });
         });
     // Routes that only super_admin can access
