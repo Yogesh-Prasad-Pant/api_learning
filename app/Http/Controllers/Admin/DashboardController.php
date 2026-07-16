@@ -95,7 +95,7 @@ class DashboardController extends Controller
     {
         $admin = auth('admin')->user();
         $shopId = $request->query('shop_id');
-        $shops = $shopId? $admin->shops()->where('id', $shopId)->get(['id','name']):$admin->shops()->get(['id','name']);
+        $shops = $shopId? $admin->shops()->where('id', $shopId)->get(['id','shop_name']):$admin->shops()->get(['id','name']);
         $chartData = [];
         foreach($shops as $shop){
             $points = Order::where('shop_id', $shop->id)
@@ -113,12 +113,55 @@ class DashboardController extends Controller
         $admin = auth('admin')->user();
         $shopId = $request->query('shop_id');
         $ownedShopIds = $admin->shops()->pluck('id');
-        $orders = Order::query()->with('shop:id, name')
+        $orders = Order::query()->with('shop:id, shop_name')
             ->select('id','shop_id','toal_price', 'status', 'created_at')
             ->whereIn('shop_id',$ownedShopsIds)
             ->when($shopId, fn($q)=> $q->where('shop_id',$shopId))
             ->latest()->simplePaginate(10);
         return response()->json($orders);
+    }
+
+    public function toggleShopStatus(Request $request, $shop_id)
+    {
+        $admin = $request->user();
+        $shop = $admin->shops()->find($shop_id);
+        if($shop){
+            $shop->is_open = !$shop->is_open;
+            $shop->save();
+            return response()->json([
+                'status' => 'success',
+                'is_open' => $shop->is_open,
+                'message' => $shop->is_open? 'Shop is now Open':'Shop is now Closed'
+            ]);
+        }
+        else{
+            return response()->json([
+                'status' => 'failed',
+                'is_open' => 'null',
+                'message' => 'This shop is not found. Contact the site manager'
+            ]);
+        }
+    }
+
+    public function addProduct(Request $request, $id){
+        $admin = $requesst->user();
+        $shop = $admin->shops()->find($id);
+         if($shop){
+           
+            return response()->json([
+                'status' => 'success',
+                'is_open' => $shop->is_open,
+                'message' => $shop->is_open? 'Shop is now Open':'Shop is now Closed'
+            ]);
+        }
+        else{
+            return response()->json([
+                'status' => 'failed',
+                'is_open' => 'null',
+                'message' => 'This shop is not found. Contact the site manager'
+            ]);
+        }
+
     }
     
     

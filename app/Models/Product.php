@@ -42,8 +42,8 @@ class Product extends Model
 
     }
     public function shops(){
-        return $this->belongsToMany(Shop::class, 'product_shop')
-        ->using(ProductShop::class)
+        return $this->belongsToMany(Shop::class, 'shop_products')
+        ->using(ShopProduct::class)
         ->withPivot(['price', 'sale_price', 'stock', 'local_image', 'last_stock_update', 'is_available'])
         ->withTimestamps();
     }
