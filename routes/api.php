@@ -47,6 +47,7 @@ Route::prefix('admin')->group(function (){
                 Route::put('/update/{product_id}', [ProductController::class, 'updateProduct']);
                 Route::post('/update_product_image/{product_id}', [ProductController::class, 'updateProductImage']);
                 Route::delete('/delete/{product_id}', [ProductController::class, 'deleteProduct']);
+                Route::delete('/force-delete/{product_id}',[ProductController::class, 'forceDeleteProduct']);
             });
         });
     // Routes that only super_admin can access
