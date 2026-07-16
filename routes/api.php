@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\AdminManagementController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ProductController;
 
 Route::prefix('admin')->group(function (){
 
@@ -35,8 +36,17 @@ Route::prefix('admin')->group(function (){
                 Route::get('/index', [DashboardController::class, 'index']);
                 Route::get('/stats', [DashboardController::class, 'getStats']);
                 Route::get('/chart', [DashboardController::class, 'getChartData']);
-                Route::get('/orders', [DashboardController::class, 'getRecenOrders']);
-                Route::get('/shop/{id}/toggle-status',[DashboardController::class, 'toggleShopStatus']);
+                Route::get('/orders', [DashboardController::class, 'getRecentOrders']);
+                Route::get('/shop/{shop_id}/toggle-status',[DashboardController::class, 'toggleShopStatus']);
+            });
+            Route::prefix('products')->group(function()
+            {
+                Route::post('/store',[ProductController::class, 'store']);
+                Route::get('/all',[ProductController::class, 'index']);
+                Route::get('/{product_id}', [ProductController::class, 'getProduct']);
+                Route::put('/update/{product_id}', [ProductController::class, 'updateProduct']);
+                Route::post('/update_product_image/{product_id}', [ProductController::class, 'updateProductImage']);
+                Route::delete('/delete/{product_id}', [ProductController::class, 'deleteProduct']);
             });
         });
     // Routes that only super_admin can access

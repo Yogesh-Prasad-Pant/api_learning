@@ -52,15 +52,33 @@ class Shop extends Model
         return $this->belongsToMany(Category::class, 'category_shop');
     }
     public function scopeNear($query, $latitude, $longitude, $radiusInKm = 10)
-{
-    $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude)) 
+     {
+             $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude)) 
                   * cos(radians(longitude) - radians(?)) 
                   + sin(radians(?)) * sin(radians(latitude))))";
 
-    return $query->select('*')
+            return $query->select('*')
                  ->selectRaw("{$haversine} AS distance", [$latitude, $longitude, $latitude])
                  ->whereRaw("{$haversine} < ?", [$latitude, $longitude, $latitude, $radiusInKm])
                  ->orderBy('distance');
-}
+    }
+    public function products()
+    {
+        return $this->belongsToMany(Product::class, 'shop_products')
+                    ->using(ShopProduct::class) // Binds it to your custom Pivot class setup
+                    ->withPivot([
+                        'price', 
+                        'sale_price', 
+                        'stock', 
+                        'min_order', 
+                        'max_order', 
+                        'local_image', 
+                        'last_stock_update', 
+                        'is_available',
+                        'sale_start',
+                        'sale_end'
+                    ])
+                    ->withTimestamps();
+    }
     //
 }

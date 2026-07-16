@@ -47,7 +47,7 @@ class Product extends Model
         ->withPivot(['price', 'sale_price', 'stock', 'local_image', 'last_stock_update', 'is_available'])
         ->withTimestamps();
     }
-    
+
     
 
     //

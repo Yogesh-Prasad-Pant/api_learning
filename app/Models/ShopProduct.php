@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class ProductShop extends Pivot
-{
-    protected $table = 'product_shop';
 
+class ShopProduct extends Pivot
+{   
+    use SoftDeletes;
+    protected $table = 'shop_products';
+   
     public $incrementing = true; 
 
 

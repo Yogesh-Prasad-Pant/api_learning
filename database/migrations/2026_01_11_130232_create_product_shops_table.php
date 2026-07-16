@@ -31,6 +31,8 @@ return new class extends Migration
 
             $table->timestamp('sale_start')->nullable();
             $table->timestamp('sale_end')->nullable();
+
+            $table->softDeletes();
             
             $table->timestamps();
 
