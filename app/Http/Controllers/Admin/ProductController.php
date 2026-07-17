@@ -6,25 +6,23 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\ShopProduct;
+use App\Models\OrderItem;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
 class ProductController extends Controller
 {
     //
-    private function getShopIdOrThrow()
+  
+    private function hasBeenOrdered($shopId, $product_id)
     {
-        $shopId = Auth::user()->shop?->id;
-
-        if (!$shopId) {
-            abort(403, 'Action denied. No active shop profile found for this admin account.');
-        }
-
-        return $shopId;
+        return OrderItem::where('shop_id', $shopId)
+            ->where('product_id', $product_id)
+            ->exists();
     }
-
     public function store(Request $request)
     {
-        $shopId = $this->getShopIdOrThrow();
+        $shopId = $request->active_shop_id;
 
         $validatedData = $request->validate([
             'product_id'   => 'required|exists:products,id',
@@ -62,10 +60,24 @@ class ProductController extends Controller
         ], 201);
     }
 
-    
-    public function getProduct($product_id)
+    public function index(Request $request)
     {
-        $shopId = $this->getShopIdOrThrow();
+        $shopId = $request->active_shop_id;
+        $shopProducts = ShopProduct::with('product')
+            ->where('shop_id', $shopId)
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'count'  => $shopProducts->count(),
+            'data'   => $shopProducts
+        ]);
+    }
+
+    
+    public function getProduct(Request $request,$product_id)
+    {
+        $shopId = $request->active_shop_id;
 
         $shopProduct = ShopProduct::with('product')
             ->where('shop_id', $shopId)
@@ -85,7 +97,7 @@ class ProductController extends Controller
    
     public function updateProduct(Request $request, $product_id)
     {
-        $shopId = $this->getShopIdOrThrow();
+        $shopId = $request->active_shop_id;
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -94,17 +106,21 @@ class ProductController extends Controller
         if (!$shopProduct) {
             return response()->json(['message' => 'Product inventory record not found.'], 404);
         }
-
+        $currentPrice = $request->input('price', $shopProduct->price);
+        $currentMinOrder = $request->input('min_order', $shopProduct->min_order);
         $validatedData = $request->validate([
             'price'        => 'sometimes|required|numeric|min:0',
-            'sale_price'   => 'nullable|numeric|min:0',
+            'sale_price'   => 'nullable|numeric|min:0|lt:{$currentPrice}',
             'stock'        => 'sometimes|required|integer|min:0',
             'min_order'    => 'integer|min:1',
-            'max_order'    => 'nullable|integer',
+            'max_order'    => 'nullable|integer|gt:{$currentMinOrder}',
             'is_available' => 'boolean',
             'sale_start'   => 'nullable|date',
             'sale_end'     => 'nullable|date'
         ]);
+        if(array_key_exists('stock', $validatedData)&&(int)$validatedData['stock'] !== (int)$shopProduct->stock){
+            $validatedData['last_stock_update'] = now();  
+        }
         $shopProduct->update($validatedData);
 
         return response()->json([
@@ -117,7 +133,7 @@ class ProductController extends Controller
     
     public function updateProductImage(Request $request, $product_id)
     {
-        $shopId = $this->getShopIdOrThrow();
+        $shopId = $request->active_shop_id;
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -152,9 +168,9 @@ class ProductController extends Controller
     }
 
     
-    public function deleteProduct($product_id)
+    public function deleteProduct(Request $request, $product_id)
     {
-        $shopId = $this->getShopIdOrThrow();
+        $shopId = $request->active_shop_id;
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -171,9 +187,9 @@ class ProductController extends Controller
             'message' => 'Product has been safely archived from your storefront display.'
         ]);
     }
-    public function forceDeleteProduct($product_id)
+    public function forceDeleteProduct(Request $request, $product_id)
     {
-        $shopId = $this->getShopIdOrThrow();
+        $shopId = $request->active_shop_id;
 
         $shopProduct = ShopProduct::withTrashed()
             ->where('shop_id', $shopId)
@@ -203,4 +219,5 @@ class ProductController extends Controller
             'message' => 'Product and associated files have been permanently purged.'
         ]);
     }
+    
 }
