@@ -22,10 +22,11 @@ class ProductController extends Controller
     }
     public function store(Request $request)
     {
-        $shopId = $request->active_shop_id;
+        $shop = $request->active_shop;
+        $shopId = $shop->id;
 
         $validatedData = $request->validate([
-            'product_id'   => 'required|exists:products,id',
+            'product_id'   => 'nullable|exists:products,id',
             'price'        => 'required|numeric|min:0',
             'sale_price'   => 'nullable|numeric|min:0|lt:price',
             'stock'        => 'required|integer|min:0',
@@ -33,11 +34,11 @@ class ProductController extends Controller
             'max_order'    => 'nullable|integer|gt:min_order',
             'is_available' => 'boolean',
             'sale_start'   => 'nullable|date',
-            'sale_end'     => 'nullable|date|after:sale_start'
+            'sale_end'     => 'nullable|date|after:sale_start',
+            'local_image'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $validatedData['shop_id'] = $shopId;
-
         $exists = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $request->product_id)
             ->exists();
@@ -62,7 +63,7 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
-        $shopId = $request->active_shop_id;
+        $shopId = $request->active_shop->id;
         $shopProducts = ShopProduct::with('product')
             ->where('shop_id', $shopId)
             ->get();
@@ -74,10 +75,9 @@ class ProductController extends Controller
         ]);
     }
 
-    
     public function getProduct(Request $request,$product_id)
     {
-        $shopId = $request->active_shop_id;
+        $shopId = $request->active_shop->id;
 
         $shopProduct = ShopProduct::with('product')
             ->where('shop_id', $shopId)
@@ -94,10 +94,9 @@ class ProductController extends Controller
         ]);
     }
 
-   
     public function updateProduct(Request $request, $product_id)
     {
-        $shopId = $request->active_shop_id;
+        $shopId = $request->active_shop->id;
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -130,10 +129,9 @@ class ProductController extends Controller
         ]);
     }
 
-    
     public function updateProductImage(Request $request, $product_id)
     {
-        $shopId = $request->active_shop_id;
+        $shopId = $request->active_shop->id;
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -151,7 +149,7 @@ class ProductController extends Controller
             if($shopProduct->local_image && Storage::disk('public')->exists($shopProduct->local_image)){
                 Storage::disk('public')->delete($shopProduct->local_image);
             }
-            $path = $request->file('local_image')->store('shop_products', 'public');
+            $path = $request->file('local_image')->store('shops/shop_products', 'public');
             
             $shopProduct->update([
                 'local_image' => $path
@@ -170,7 +168,7 @@ class ProductController extends Controller
     
     public function deleteProduct(Request $request, $product_id)
     {
-        $shopId = $request->active_shop_id;
+        $shopId = $request->active_shop->id;
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -189,7 +187,7 @@ class ProductController extends Controller
     }
     public function forceDeleteProduct(Request $request, $product_id)
     {
-        $shopId = $request->active_shop_id;
+        $shopId = $request->active_shop->id;
 
         $shopProduct = ShopProduct::withTrashed()
             ->where('shop_id', $shopId)

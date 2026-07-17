@@ -20,18 +20,18 @@ class AssignShopContext
         if(!$shopId) {
             return response()->json([
                 'status' => 'error',
-                'messge' => 'Missing shop context. Please select a shop first.'
+                'message' => 'Missing shop context. Please select a shop first.'
             ],422);
         }
 
-        $ownsShop = Auth::user()->shops()->where('id', $shpId)->exists();
-            if(!$ownsShop){
+        $shop = Auth::user()->shops()->find($shopId);
+            if(!$shop){
                 return response()->json([
-                    'status' => 'eroor',
+                    'status' => 'error',
                     'message' => 'Unauthorized access request to this shop environment.'
                 ], 403);
             }
-        $request->attribute->set('active_shop_id', (int) $shopId);
+        $request->merge(['active_shop' => $shop]);
         return $next($request);
     }
 }

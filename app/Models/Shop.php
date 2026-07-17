@@ -19,8 +19,7 @@ class Shop extends Model
         'business_email', 
         'map_location',
         'contact_no', 
-        'address', 
-        'status', 
+        'address',  
         'is_open',
         'opening_hours',
         // 'is_featured', 
@@ -57,8 +56,7 @@ class Shop extends Model
                   * cos(radians(longitude) - radians(?)) 
                   + sin(radians(?)) * sin(radians(latitude))))";
 
-            return $query->select('*')
-                 ->selectRaw("{$haversine} AS distance", [$latitude, $longitude, $latitude])
+            return $query->selectRaw("*,{$haversine} AS distance", [$latitude, $longitude, $latitude])
                  ->whereRaw("{$haversine} < ?", [$latitude, $longitude, $latitude, $radiusInKm])
                  ->orderBy('distance');
     }

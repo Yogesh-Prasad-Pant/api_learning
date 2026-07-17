@@ -66,7 +66,7 @@ class DashboardController extends Controller
     public function getStats(Request $request)
     {
         $admin = auth('admin')->user();
-        $shoopId = $request->query('shop_id');
+        $shopId = $request->query('shop_id');
         $period = $request->query('period', 'daily');
         $shopIds = $shopId?[$shopId]:$admin->shops()->pluck('id');
         $dataFilter = match($period) {

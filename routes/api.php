@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\AdminManagementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ShopController;
 
 Route::prefix('admin')->group(function (){
 
@@ -34,20 +35,34 @@ Route::prefix('admin')->group(function (){
             Route::prefix('dashboard')->group(function()
             {
                 Route::get('/index', [DashboardController::class, 'index']);
-                Route::get('/stats', [DashboardController::class, 'getStats']);
-                Route::get('/chart', [DashboardController::class, 'getChartData']);
-                Route::get('/orders', [DashboardController::class, 'getRecentOrders']);
-                Route::get('/shop/{shop_id}/toggle-status',[DashboardController::class, 'toggleShopStatus']);
             });
-            Route::prefix('products')->group(function()
+            Route::get('/shops', [ShopController::class, 'index']);
+            Route::post('/shops', [ShopController::class, 'store']);
+            Route::middleware(['assign_shop'])->group(function ()
             {
-                Route::post('/store',[ProductController::class, 'store']);
-                Route::get('/all',[ProductController::class, 'index']);
-                Route::get('/{product_id}', [ProductController::class, 'getProduct']);
-                Route::put('/update/{product_id}', [ProductController::class, 'updateProduct']);
-                Route::post('/update_product_image/{product_id}', [ProductController::class, 'updateProductImage']);
-                Route::delete('/delete/{product_id}', [ProductController::class, 'deleteProduct']);
-                Route::delete('/force-delete/{product_id}',[ProductController::class, 'forceDeleteProduct']);
+                Route::prefix('dashboard')->group(function()
+                {
+                    Route::get('/stats', [DashboardController::class, 'getStats']);
+                    Route::get('/chart', [DashboardController::class, 'getChartData']);
+                    Route::get('/orders', [DashboardController::class, 'getRecentOrders']);
+                    Route::get('/toggle-status',[DashboardController::class, 'toggleShopStatus']);
+                });
+                Route::prefix('shop')->group(function () 
+                {
+                    Route::get('/profile', [ShopController::class, 'show']);         
+                    Route::put('/profile', [ShopController::class, 'update']);        
+                    Route::post('/profile/branding', [ShopController::class, 'updateBranding']);   
+                });
+                Route::prefix('products')->group(function()
+                {
+                    Route::post('/store',[ProductController::class, 'store']);
+                    Route::get('/all',[ProductController::class, 'index']);
+                    Route::get('/{product_id}', [ProductController::class, 'getProduct']);
+                    Route::put('/update/{product_id}', [ProductController::class, 'updateProduct']);
+                    Route::post('/update_product_image/{product_id}', [ProductController::class, 'updateProductImage']);
+                    Route::delete('/delete/{product_id}', [ProductController::class, 'deleteProduct']);
+                    Route::delete('/force-delete/{product_id}',[ProductController::class, 'forceDeleteProduct']);
+                });
             });
         });
     // Routes that only super_admin can access
