@@ -15,8 +15,8 @@ class ShopProduct extends Pivot
 
 
     protected $fillable = [
-        'product_id', 
-        'shop_id', 
+        // 'product_id', 
+        // 'shop_id', 
         'price', 
         'sale_price', 
         'stock',
@@ -30,9 +30,11 @@ class ShopProduct extends Pivot
     ];
 
     protected $casts = [
+        'price' => 'decimal:2',        
+        'sale_price' => 'decimal:2',
         'last_stock_update' => 'datetime',
         'is_available' => 'boolean',
-        'sale_start' => 'datetime', // Recommended
+        'sale_start' => 'datetime', 
         'sale_end' => 'datetime',
     ];
 

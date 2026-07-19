@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained('products')->onDelete('cascade')->onUpdate('cascade');
             $table->foreignId('shop_id')->constrained('shops')->onDelete('cascade');
         
-       
             $table->decimal('price', 15, 2)->index();
             $table->decimal('sale_price', 15, 2)->nullable();
             $table->integer('stock')->default(0);
@@ -33,11 +32,9 @@ return new class extends Migration
             $table->timestamp('sale_end')->nullable();
 
             $table->softDeletes();
-            
             $table->timestamps();
-
-        // Prevents a shop from listing the same product twice
-        $table->unique(['product_id', 'shop_id']);
+             // Prevents a shop from listing the same product twice
+            $table->unique(['shop_id', 'product_id']);
         });
     }
 

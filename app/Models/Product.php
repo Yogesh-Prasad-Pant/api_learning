@@ -31,7 +31,10 @@ class Product extends Model
     protected static function boot(){
         parent::boot();
         static::creating(function ($product){
-             $product->slug = $product->slug ?? Str::slug(($product->name));    
+             $product->slug = $product->slug ?? Str::slug(($product->name)); 
+             if (auth('admin')->check() && !$product->creator_id) {
+                $product->creator_id = auth('admin')->id();
+            }   
         });
     }
     public function category(){
@@ -44,7 +47,7 @@ class Product extends Model
     public function shops(){
         return $this->belongsToMany(Shop::class, 'shop_products')
         ->using(ShopProduct::class)
-        ->withPivot(['price', 'sale_price', 'stock', 'local_image', 'last_stock_update', 'is_available'])
+        ->withPivot(['price', 'sale_price', 'stock', 'local_image', 'last_stock_update', 'is_available','sale_start','sale_end'])
         ->withTimestamps();
     }
 
