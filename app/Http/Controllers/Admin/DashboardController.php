@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Admin;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Shop;
-use Carborn\Carbon;
+use Illuminate\Support\Carbon;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Admin;
 
 
 class DashboardController extends Controller
@@ -143,7 +144,8 @@ class DashboardController extends Controller
         }
     }
 
-    public function addProduct(Request $request, $id){
+    public function addProduct(Request $request, $id)
+    {
         $admin = $requesst->user();
         $shop = $admin->shops()->find($id);
          if($shop){
