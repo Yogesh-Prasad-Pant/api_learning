@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Exception;
 
 class ProductController extends Controller
@@ -27,25 +28,31 @@ class ProductController extends Controller
     {
         $shop = $request->active_shop;
         $shopId = $shop ? $shop->id : null;
+        $hasProductId = $request->filled('product_id');
 
+        $user = $request->user();
+        $isSuperAdmin = $user && $user->role === 'super_admin';
+        $isActive = $user && $user->status === 'active';
+
+        // 1. Validation Rules
         $validatedData = $request->validate([
-           'product_id'    => 'nullable|required_without:name|exists:products,id',
+            'product_id'    => 'nullable|exists:products,id',
             
-            // Specifications for constructing a brand new base item
-            'name'          => 'nullable|required_without:product_id|string|max:255',
-            'category_id'   => 'required_if:product_id,null|exists:categories,id',
-            'brand_id'      => 'required_if:product_id,null|exists:brands,id',
+            // Base catalog specifications (Required if creating a new global product)
+            'name'          => 'required_without:product_id|nullable|string|max:255',
+            'category_id'   => 'required_without:product_id|nullable|exists:categories,id',
+            'brand_id'      => 'required_without:product_id|nullable|exists:brands,id',
+            'unit'          => 'required_without:product_id|nullable|string|max:50',
             'description'   => 'nullable|string',
             'video_url'     => 'nullable|url',
             'has_variants'  => 'boolean',
-            'unit'          => 'required_if:product_id,null|string|max:50',
             'catalog_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'attributes'    => 'nullable|array',
 
-            // Local storefront parameters (Mandatory if working within an active shop scope)
-            'price'         => 'required|numeric|min:0',
+            // Local storefront parameters (Required if attached to a shop)
+            'price'         => 'required_with:active_shop|nullable|numeric|min:0',
             'sale_price'    => 'nullable|numeric|min:0|lt:price',
-            'stock'         => 'required|integer|min:0',
+            'stock'         => 'required_with:active_shop|nullable|integer|min:0',
             'min_order'     => 'integer|min:1',
             'max_order'     => 'nullable|integer|gt:min_order',
             'is_available'  => 'boolean',
@@ -54,116 +61,176 @@ class ProductController extends Controller
             'local_image'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
-        if (!$validatedData['product_id'] && !$shopId) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Global asset registration requires superadmin permissions.'
-            ], 403);
-        }
-
         $uploadedCatalogImage = null;
         $uploadedLocalImage = null;
 
         try {
-            if (!$request->input('product_id') && $request->hasFile('catalog_image')) {
-                $file = $request->file('catalog_image');
-                $catFileName = 'catalog_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                $uploadedCatalogImage = $file->storeAs('products/catalog', $catFileName, 'public');
+            // Handle file uploads upfront to keep DB logic clean
+            if ($request->hasFile('catalog_image')) {
+                $uploadedCatalogImage = $request->file('catalog_image')->store('products/catalog', 'public');
             }
 
-            if ($shopId && $request->hasFile('local_image')) {
-                $file = $request->file('local_image');
-                $tempId = $request->input('product_id') ?? 'new';
-                $fileName = 'shop_' . $shopId . '_prod_' . $tempId . '_' . time() . '.' . $file->getClientOriginalExtension();
-                $uploadedLocalImage = $file->storeAs('shops/shop_products', $fileName, 'public');
+            if ($request->hasFile('local_image')) {
+                $uploadedLocalImage = $request->file('local_image')->store('shops/shop_products', 'public');
             }
-            $result = DB::transaction(function () use($request, $validatedData, $shopId, $uploadedCatalogImage, $uploadedLocalImage)
-            {
-                $productId = $validatedData['product_id'] ?? null;
-                $isNewGlobalProduct = false;
-                if(!$productId){
-                    $isNewGlobalProduct = true;
-                    $product = new Product();
-                        $product->shop_id       = $shopId; 
-                        $product->category_id   = $validatedData['category_id'];
-                        $product->brand_id      = $validatedData['brand_id'];
-                        $product->name          = $validatedData['name'];
-                        $product->description   = $validatedData['description'] ?? null;
-                        $product->video_url     = $validatedData['video_url'] ?? null;
-                        $product->has_variants  = $validatedData['has_variants'] ?? false;
-                        $product->unit          = $validatedData['unit'];
-                        $product->catalog_image = $uploadedCatalogImage;
-                        $product->attributes    = $validatedData['attributes'] ?? null;
-                        $product->save();
-                    $productId = $product->id;
+
+            // CASE 1: SUPERADMIN REGISTERING A GLOBAL CATALOG PRODUCT ONLY
+            
+            if ($isSuperAdmin && !$shopId) {
+                
+                $product = Product::create([
+                    'shop_id'       => null,
+                    'category_id'   => $validatedData['category_id'],
+                    'brand_id'      => $validatedData['brand_id'],
+                    'name'          => $validatedData['name'],
+                    'description'   => $validatedData['description'] ?? null,
+                    'video_url'     => $validatedData['video_url'] ?? null,
+                    'has_variants'  => $validatedData['has_variants'] ?? false,
+                    'unit'          => $validatedData['unit'],
+                    'catalog_image' => $uploadedCatalogImage,
+                    'attributes'    => $validatedData['attributes'] ?? null,
+                ]);
+
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Global master catalog item registered successfully.',
+                    'data'    => $product
+                ], 201);
+            }
+            // CASE 2: NORMAL ADMIN/SHOP ATTACHING AN EXISTING GLOBAL PRODUCT
+            else if ($shopId && $hasProductId) {
+
+                if (!$isActive) {
+                    $localCount = ShopProduct::where('shop_id', $shopId)->count();
+                    if ($localCount >= 200) {
+                        $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);
+                        return response()->json([
+                            'status'  => 'error',
+                            'message' => 'Your account is inactive and has reached the limit of 200 linked products. Please contact the platform owner or super admin to activate your account.'
+                        ], 403);
+                    }
                 }
-                if($shopId){
-                    $exists = ShopProduct::where('shop_id', $shopId)
+
+                $productId = $validatedData['product_id'];
+
+                $alreadyExists = ShopProduct::where('shop_id', $shopId)
                     ->where('product_id', $productId)
                     ->exists();
 
-                    if($exists){
-                        throw ValidationException::withMessages([
-                            'product_id'=>['This catalog item is already listed in shop inventory.']
-                        ]);
-                    }
-
-                    $shopProduct = new ShopProduct();
-                    $shopProduct->shop_id      = $shopId;
-                    $shopProduct->product_id   = $productId;
-                    $shopProduct->price        = $validatedData['price'];
-                    $shopProduct->sale_price   = $validatedData['sale_price'] ?? null;
-                    $shopProduct->stock        = $validatedData['stock'];
-                    $shopProduct->min_order    = $validatedData['min_order'] ?? 1;
-                    $shopProduct->max_order    = $validatedData['max_order'] ?? null;
-                    $shopProduct->is_available = $validatedData['is_available'] ?? true;
-                    $shopProduct->sale_start   = $validatedData['sale_start'] ?? null;
-                    $shopProduct->sale_end     = $validatedData['sale_end'] ?? null;
-                    $shopProduct->local_image  = $uploadedLocalImage;
-                    $shopProduct->save();
-
-                    return [
-                        'message' => $isNewGlobalProduct 
-                            ? 'Product successfully registered and added to storefront.' 
-                            : 'Catalog product successfully added to your storefront.',
-                        'data'    => $shopProduct->load('product'),
-                    ];
+                if ($alreadyExists) {
+                    throw ValidationException::withMessages([
+                        'product_id' => ['This catalog item is already listed in your shop inventory.']
+                    ]);
                 }
 
-                return [
-                    'message' => 'Global master catalog item registered successfully.',
-                    'data'    => Product::find($productId),
-                ];
-            });
+                $shopProduct = ShopProduct::create([
+                    'shop_id'      => $shopId,
+                    'product_id'   => $productId,
+                    'price'        => $validatedData['price'] ?? 0,
+                    'sale_price'   => $validatedData['sale_price'] ?? null,
+                    'stock'        => $validatedData['stock'] ?? 0,
+                    'min_order'    => $validatedData['min_order'] ?? 1,
+                    'max_order'    => $validatedData['max_order'] ?? null,
+                    'is_available' => $validatedData['is_available'] ?? true,
+                    'sale_start'   => $validatedData['sale_start'] ?? null,
+                    'sale_end'     => $validatedData['sale_end'] ?? null,
+                    'local_image'  => $uploadedLocalImage,
+                ]);
 
-            return response()->json([
-                'status'  => 'success',
-                'message' => $result['message'],
-                'data'    => $result['data']
-            ], 201);
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Catalog product successfully added to your storefront.',
+                    'data'    => $shopProduct->load('product')
+                ], 201);
+            }
+            // CASE 3: NORMAL ADMIN/SHOP CREATING A NEW GLOBAL PRODUCT + LOCAL STOREFRONT LISTING
+            else if ($shopId && !$hasProductId) {
 
-        }
-        catch (ValidationException $e) {
-            $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);   
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed.',
-                'errors' => $e->errors()
-            ], 422);
-        }
-        catch (Exception $e) {
+                $globalCount = Product::where('shop_id', $shopId)->count();
+
+                if (!$isActive && $globalCount >= 100) {
+                    $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => 'Your account is inactive and has reached the limit of 100 global products. Please contact the platform owner or super admin to activate your account.'
+                    ], 403);
+                }
+
+                if ($isActive && $globalCount >= 1000) {
+                    $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => 'You have reached your maximum limit of 1,000 global products. Please contact the platform owner or super admin to request a limit upgrade.'
+                    ], 403);
+                }
+
+                $shopProduct = DB::transaction(function () use ($validatedData, $shopId, $uploadedCatalogImage, $uploadedLocalImage) {
+                    
+                    $product = Product::create([
+                        'shop_id'       => $shopId,
+                        'category_id'   => $validatedData['category_id'],
+                        'brand_id'      => $validatedData['brand_id'],
+                        'name'          => $validatedData['name'],
+                        'description'   => $validatedData['description'] ?? null,
+                        'video_url'     => $validatedData['video_url'] ?? null,
+                        'has_variants'  => $validatedData['has_variants'] ?? false,
+                        'unit'          => $validatedData['unit'],
+                        'catalog_image' => $uploadedCatalogImage,
+                        'attributes'    => $validatedData['attributes'] ?? null,
+                    ]);
+
+                    return ShopProduct::create([
+                        'shop_id'      => $shopId,
+                        'product_id'   => $product->id,
+                        'price'        => $validatedData['price'] ?? 0,
+                        'sale_price'   => $validatedData['sale_price'] ?? null,
+                        'stock'        => $validatedData['stock'] ?? 0,
+                        'min_order'    => $validatedData['min_order'] ?? 1,
+                        'max_order'    => $validatedData['max_order'] ?? null,
+                        'is_available' => $validatedData['is_available'] ?? true,
+                        'sale_start'   => $validatedData['sale_start'] ?? null,
+                        'sale_end'     => $validatedData['sale_end'] ?? null,
+                        'local_image'  => $uploadedLocalImage,
+                    ]);
+                });
+
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Product successfully registered and added to storefront.',
+                    'data'    => $shopProduct->load('product')
+                ], 201);
+            }
+
+            // FALLBACK
             $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);
             return response()->json([
-                'status' => 'error',
-                 'message' => 'An unexpected server error occourred.'
-            ],500);
+                'status'  => 'error',
+                'message' => 'Invalid context or missing required parameters for product creation.'
+            ], 400);
+
+        } catch (ValidationException $e) {
+            $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Validation failed.',
+                'errors'  => $e->errors()
+            ], 422);
+        } catch (Exception $e) {
+            $this->purgeFiles($uploadedCatalogImage, $uploadedLocalImage);
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'An unexpected server error occurred.'
+            ], 500);
         }
-       
     }
+    
 
     public function index(Request $request)
     {
-        $shopId = $request->active_shop->id;
+        $shopId = $request->active_shop?->id;
+        if (!$shopId) {
+            return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
+        }
         $shopProducts = ShopProduct::with('product')
             ->where('shop_id', $shopId)
             ->get();
@@ -177,7 +244,10 @@ class ProductController extends Controller
 
     public function getProduct(Request $request,$product_id)
     {
-        $shopId = $request->active_shop->id;
+        $shopId = $request->active_shop?->id;
+        if (!$shopId) {
+            return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
+        }
 
         $shopProduct = ShopProduct::with('product')
             ->where('shop_id', $shopId)
@@ -196,7 +266,10 @@ class ProductController extends Controller
 
     public function updateProduct(Request $request, $product_id)
     {
-        $shopId = $request->active_shop->id;
+        $shopId = $request->active_shop?->id;
+        if (!$shopId) {
+            return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
+        }
         $shopProduct = ShopProduct::where('shop_id', $shopId)
                 ->where('product_id', $product_id)
                 ->first();
@@ -228,7 +301,7 @@ class ProductController extends Controller
                     'sale_start'   => 'nullable|date',
                     'sale_end'     => 'nullable|date|required_with:sale_start|after:sale_start',
                 ]);
-            $shopProduct = DB::transaction(function () use ($validatedData, $shopProduct){
+            $shopProduct = DB::transaction(function () use ($validatedData, $shopProduct, $request){
                 if(array_key_exists('stock', $validatedData)&&(int)$validatedData['stock'] !== (int)$shopProduct->stock){
                     $shopProduct->last_stock_update = now();  
                 }
@@ -264,7 +337,10 @@ class ProductController extends Controller
 
     public function updateProductImage(Request $request, $product_id)
     {
-        $shopId = $request->active_shop->id;
+        $shopId = $request->active_shop?->id;
+        if (!$shopId) {
+            return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
+        }
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -363,7 +439,10 @@ class ProductController extends Controller
     
     public function deleteProduct(Request $request, $product_id)
     {
-        $shopId = $request->active_shop->id;
+        $shopId = $request->active_shop?->id;
+        if (!$shopId) {
+            return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
+        }
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
             ->where('product_id', $product_id)
@@ -382,7 +461,10 @@ class ProductController extends Controller
     }
     public function forceDeleteProduct(Request $request, $product_id)
     {
-        $shopId = $request->active_shop->id;
+        $shopId = $request->active_shop?->id;
+        if (!$shopId) {
+            return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
+        }
 
         $shopProduct = ShopProduct::withTrashed()
             ->where('shop_id', $shopId)
@@ -413,13 +495,13 @@ class ProductController extends Controller
         ]);
     }
 
-    private function purgeFiles(...$files)
+    private function purgeFiles(?string ...$files): void
     {
-        foreach ($files as $file) {
-            if ($file && Storage::disk('public')->exists($file)) {
-                Storage::disk('public')->delete($file);
+            foreach ($files as $file) {
+                if ($file && Storage::disk('public')->exists($file)) {
+                    Storage::disk('public')->delete($file);
+                }
             }
-        }
     }
     
 }
