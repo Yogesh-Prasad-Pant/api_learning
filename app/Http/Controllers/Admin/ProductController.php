@@ -156,7 +156,7 @@ class ProductController extends Controller
                         'message' => 'You have reached your maximum limit of 1,000 global products. Please contact the platform owner or super admin to request a limit upgrade.'
                     ], 403);
                 }
-                
+
                 if ($request->hasFile('catalog_image')) {
                     $uploadedCatalogImage = $request->file('catalog_image')->store('products/catalog', 'public');
                 }
@@ -233,14 +233,91 @@ class ProductController extends Controller
         if (!$shopId) {
             return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
         }
-        $shopProducts = ShopProduct::with('product')
-            ->where('shop_id', $shopId)
-            ->get();
+
+        $query = ShopProduct::with(['product.category', 'product.brand'])
+            ->where('shop_id', $shopId);
+
+        // =========================================================================
+        // 1. TEXT SEARCH (Name, Brand, Category, IDs — Price removed from here)
+        // =========================================================================
+        if ($request->filled('q')) {
+            $term = trim($request->input('q'));
+
+            $query->where(function ($subQuery) use ($term) {
+                // Numeric IDs only (Exact match)
+                if (is_numeric($term)) {
+                    $subQuery->orWhere('id', $term)
+                            ->orWhere('product_id', $term);
+                }
+
+                // String Search on Catalog Product (Name, Category, Brand)
+                $subQuery->orWhereHas('product', function ($pQuery) use ($term) {
+                    $pQuery->where('name', 'like', "%{$term}%")
+                        ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$term}%"))
+                        ->orWhereHas('brand', fn($b) => $b->where('name', 'like', "%{$term}%"));
+                });
+            });
+        }
+
+        // =========================================================================
+        // 2. DEDICATED PRICE FILTERS (Exact Price & Price Range)
+        // =========================================================================
+        // Exact price match (e.g., ?price=299)
+        if ($request->filled('price')) {
+            $query->where('price', (float) $request->input('price'));
+        }
+
+        // Price range filters (e.g., ?min_price=100&max_price=500)
+        if ($request->filled('min_price')) {
+            $query->where('price', '>=', (float) $request->input('min_price'));
+        }
+
+        if ($request->filled('max_price')) {
+            $query->where('price', '<=', (float) $request->input('max_price'));
+        }
+
+        // =========================================================================
+        // 3. QUICK ADMINISTRATIVE STATUS TABS
+        // =========================================================================
+        if ($request->filled('status')) {
+            match ($request->input('status')) {
+                'out_of_stock' => $query->where('stock', '<=', 0),
+                'low_stock'    => $query->whereBetween('stock', [1, 5]),
+                'inactive'     => $query->where('is_available', false),
+                'active'       => $query->where('is_available', true),
+                default        => null,
+            };
+        }
+
+        // =========================================================================
+        // 4. CATEGORY & BRAND DROPDOWN FILTERS
+        // =========================================================================
+        if ($request->filled('category_id')) {
+            $query->whereHas('product', fn($q) => $q->where('category_id', $request->input('category_id')));
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->whereHas('product', fn($q) => $q->where('brand_id', $request->input('brand_id')));
+        }
+
+        // =========================================================================
+        // 5. SORTING & PAGINATION
+        // =========================================================================
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = strtolower($request->input('sort_order')) === 'asc' ? 'asc' : 'desc';
+        
+        $allowedSorts = ['price', 'stock', 'created_at', 'updated_at'];
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortOrder);
+        } else {
+            $query->latest();
+        }
+
+        $perPage = min((int) $request->input('per_page', 20), 100);
 
         return response()->json([
             'status' => 'success',
-            'count'  => $shopProducts->count(),
-            'data'   => $shopProducts
+            'data'   => $query->paginate($perPage)
         ]);
     }
 
