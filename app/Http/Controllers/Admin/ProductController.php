@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Admin;
 use App\Models\Product;
 use App\Models\ShopProduct;
 use App\Models\OrderItem;
@@ -236,9 +237,9 @@ class ProductController extends Controller
         $query = ShopProduct::with(['product.category', 'product.brand'])
             ->where('shop_id', $shopId);
 
-        // =========================================================================
+        
         // 1. TEXT SEARCH (Name, Brand, Category, IDs — Price removed from here)
-        // =========================================================================
+        
         if ($request->filled('q')) {
             $term = trim($request->input('q'));
 
@@ -286,8 +287,7 @@ class ProductController extends Controller
             };
         }
 
-        
-        // 4. CATEGORY & BRAND DROPDOWN FILTERS
+
         
         if ($request->filled('category_id')) {
             $query->whereHas('product', fn($q) => $q->where('category_id', $request->input('category_id')));
@@ -296,9 +296,6 @@ class ProductController extends Controller
         if ($request->filled('brand_id')) {
             $query->whereHas('product', fn($q) => $q->where('brand_id', $request->input('brand_id')));
         }
-
-        
-        // 5. SORTING & PAGINATION
         
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = strtolower($request->input('sort_order')) === 'asc' ? 'asc' : 'desc';
@@ -327,10 +324,7 @@ class ProductController extends Controller
 
         $shopProduct = ShopProduct::with(['product.category', 'product.brand'])
             ->where('shop_id', $shopId)
-            ->where(function ($query) use ($id) {
-                $query->where('id', $id)            
-                    ->orWhere('product_id', $id); 
-            })
+            ->Where('product_id', $id)
             ->first();
 
         if (!$shopProduct) {
@@ -354,9 +348,7 @@ class ProductController extends Controller
         }
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
-            ->where(function ($q) use ($id) {
-                $q->where('id', $id)->orWhere('product_id', $id);
-            })
+            ->where('product_id', $id)
             ->first();
 
         if (!$shopProduct) {
@@ -594,7 +586,7 @@ class ProductController extends Controller
         }
     }
     
-    public function deleteProduct(Request $request, $product_id)
+    public function deleteShopProduct(Request $request, $id)
     {
         $shopId = $request->active_shop?->id;
         if (!$shopId) {
@@ -602,21 +594,144 @@ class ProductController extends Controller
         }
 
         $shopProduct = ShopProduct::where('shop_id', $shopId)
-            ->where('product_id', $product_id)
+            ->Where('product_id', $id)
             ->first();
 
         if (!$shopProduct) {
-            return response()->json(['message' => 'Product record not found.'], 404);
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Shop inventory record not found.'
+            ], 404);
         }
 
-        $shopProduct->delete();
+        $productId = $shopProduct->product_id;
 
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Product has been safely archived from your storefront display.'
-        ]);
+        try {
+            DB::transaction(function () use ($request, $shopProduct, $shopId, $productId) {
+                $shopProduct->delete();
+
+                $usedByOtherShops = ShopProduct::where('product_id', $productId)
+                    ->where('shop_id', '!=', $shopId)
+                    ->exists();
+
+                if (!$usedByOtherShops) {
+                    $globalProduct = Product::find($productId);
+                    $user = $request->user();
+
+                    if ($globalProduct) {
+                        $isCreator = (int) $globalProduct->creator_id === (int) $user?->id;
+                        $isCreatorShop = (int) $globalProduct->shop_id === (int) $shopId;
+                        $isSuperAdmin = $user && $user->hasRole('super-admin');
+
+                        // Delete global record if created by this shop/user OR if action performed by Super-Admin
+                        if ($isSuperAdmin || ($isCreator && $isCreatorShop)) {
+                            $superAdminId = Admin::role('super-amdin')->value('id');
+                            $globalProduct->shop_id = null;
+                            $globalProduct->creator_id = $superAdminId;
+                            $globalProduct->save();
+                        }
+                    }
+                }
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Product successfully removed from your shop inventory and processed for catalog cleanup.'
+            ]);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'An unexpected server error occurred while deleting the product.'
+            ], 500);
+        }
     }
-    public function forceDeleteProduct(Request $request, $product_id)
+    public function deleteGlobalProduct(Request $request, $product_id)
+    {
+        $admin = $request->user(); 
+        $isSuperAdmin = $admin->hasRole('super-admin');
+        $activeShopId = $request->active_shop?->id;
+
+        $product = Product::withTrashed()->find($product_id);
+
+        if (!$product) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Global catalog product not found.'
+            ], 404);
+        }
+
+        
+        $isCreator = $activeShopId 
+            && (int) $product->shop_id === (int) $activeShopId 
+            && (int) $product->creator_id === (int) $admin->id;
+
+        if (!$isSuperAdmin && !$isCreator) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Unauthorized. You can only manage global products created by your shop entity.'
+            ], 403);
+        }
+
+        try {
+            $wasTransferred = false;
+
+            DB::transaction(function () use ($product, $product_id, $isSuperAdmin, $activeShopId, &$wasTransferred) {
+
+            
+                if ($isSuperAdmin) {
+                    $product->delete();
+                    ShopProduct::where('product_id', $product_id)->delete();
+                    return;
+                }
+
+                $usedByOtherShops = ShopProduct::where('product_id', $product_id)
+                    ->where('shop_id', '!=', $activeShopId)
+                    ->exists();
+
+                if ($usedByOtherShops) {
+
+                    $superAdminId = Admin::role('super-admin')->value('id');
+
+                    $product->forceFill([
+                        'shop_id'    => null,
+                        'creator_id' => $superAdminId,
+                    ])->save();
+
+                    ShopProduct::where('product_id', $product_id)
+                        ->where('shop_id', $activeShopId)
+                        ->delete();
+
+                    $wasTransferred = true;
+                } else {
+
+                    $product->delete();
+                    ShopProduct::where('product_id', $product_id)->delete();
+                }
+            });
+
+            if ($isSuperAdmin) {
+                $message = 'Global product and all associated shop listings soft-deleted successfully.';
+            } else if ($wasTransferred) {
+                $message = 'Product removed from your shop inventory. Catalog ownership transferred to platform because other shops feature this item.';
+            } else {
+                $message = 'Product removed from your inventory and soft-deleted from global catalog.';
+            }
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => $message
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'An unexpected server error occurred.'
+            ], 500);
+        }
+    }
+
+    public function forceDeleteShopProduct(Request $request, $product_id)
     {
         $shopId = $request->active_shop?->id;
         if (!$shopId) {
@@ -629,29 +744,226 @@ class ProductController extends Controller
             ->first();
 
         if (!$shopProduct) {
-            return response()->json(['message' => 'Product record not found.'], 404);
+            return response()->json(['status' => 'error', 'message' => 'Shop inventory record not found.'], 404);
         }
+        $hasLocalOrders = OrderItem::where('product_id', $product_id)
+            ->whereHas('order', function ($query) use ($shopId) {
+                $query->where('shop_id', $shopId);
+            })
+            ->exists();
 
-        if ($this->hasBeenOrdered($shopId, $product_id)) {
+        if ($hasLocalOrders) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Cannot permanently delete this item because it has order history associated with it. Please use regular delete instead.'
+                'status'  => 'error',
+                'message' => 'Cannot permanently delete this product because historical customer orders depend on it.'
             ], 422);
         }
 
-        if ($shopProduct->local_image) {
-            $this->purgeFiles($shopProduct->local_image);
+        try {
+            DB::transaction(function () use ($shopProduct, $shopId, $product_id) {
+
+                $localImagePath = $shopProduct->local_image;
+
+                
+                $shopProduct->forceDelete();
+
+                if ($localImagePath) {
+                    $this->purgeFiles($localImagePath);
+                }
+
+                $globalProduct = Product::withTrashed()->find($product_id);
+
+                if ($globalProduct && (int) $globalProduct->shop_id === (int) $shopId) {
+                    
+                    $otherShopsExist = ShopProduct::withTrashed()
+                        ->where('product_id', $product_id)
+                        ->exists();
+
+                    if ($otherShopsExist) {
+                        $superAdminId = Admin::role('super-admin')->value('id');
+
+                        $globalProduct->forceFill([
+                            'shop_id'    => null,
+                            'creator_id' => $superAdminId,
+                        ])->save();
+                    } else {
+                        
+                        if (!$globalProduct->orderItems()->exists()) {
+                            $catalogImagePath = $globalProduct->catalog_image;
+
+                            $globalProduct->forceDelete();
+
+                            if ($catalogImagePath) {
+                                $this->purgeFiles($catalogImagePath);
+                            }
+                        }
+                    }
+                }
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Product permanently removed from your shop inventory and storage files purged.'
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'An unexpected server error occurred during permanent deletion.'
+            ], 500);
         }
-
-
-        $shopProduct->forceDelete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Product and associated files have been permanently purged.'
-        ]);
     }
 
+    public function forceDeleteGlobalProduct(Request $request, $product_id)
+    {
+        $admin = $request->user();
+        $isSuperAdmin = $admin->hasRole('super-admin');
+        $activeShopId = $request->active_shop?->id;
+
+        $globalProduct = Product::withTrashed()->find($product_id);
+
+        if (!$globalProduct) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Global catalog product not found.'
+            ], 404);
+        }
+
+        $isCreator = $activeShopId 
+            && (int) $globalProduct->shop_id === (int) $activeShopId 
+            && (int) $globalProduct->creator_id === (int) $admin->id;
+
+        if (!$isSuperAdmin && !$isCreator) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Unauthorized. You can only manage global products created by your shop.'
+            ], 403);
+        }
+
+        $otherShopsExist = ShopProduct::withTrashed()
+            ->where('product_id', $product_id)
+            ->where('shop_id', '!=', $activeShopId)
+            ->exists();
+
+        try {
+            $wasTransferred = false;
+
+            DB::transaction(function () use (
+                $globalProduct, 
+                $product_id, 
+                $isSuperAdmin, 
+                $activeShopId, 
+                $otherShopsExist, 
+                &$wasTransferred
+            ) {
+                // SCENARIO 1: Creator tries to delete, but OTHER SHOPS ARE USING IT
+                if (!$isSuperAdmin && $otherShopsExist) {
+
+                    $localShopProduct = ShopProduct::withTrashed()
+                        ->where('product_id', $product_id)
+                        ->where('shop_id', $activeShopId)
+                        ->first();
+
+                    // Check if THIS specific creator shop has orders for this product
+                    $hasLocalOrders = OrderItem::where('product_id', $product_id)
+                        ->whereHas('order', function ($query) use ($activeShopId) {
+                            $query->where('shop_id', $activeShopId);
+                        })
+                        ->exists();
+
+                    if ($hasLocalOrders) {
+                        throw new \Exception('LOCAL_ORDER_RESTRICTION');
+                    }
+
+                    // Transfer global ownership to Super-Admin
+                    $superAdminId = Admin::role('super-admin')->value('id');
+
+                    $globalProduct->forceFill([
+                        'shop_id'    => null,
+                        'creator_id' => $superAdminId,
+                    ])->save();
+
+                    // Delete ONLY creator local inventory & media
+                    if ($localShopProduct) {
+                        $localImage = $localShopProduct->local_image;
+
+                        $localShopProduct->forceDelete();
+
+                        if ($localImage) {
+                            $this->purgeFiles($localImage);
+                        }
+                    }
+
+                    $wasTransferred = true;
+                    return;
+                }
+
+                // SCENARIO 2: SUPER-ADMIN OR UNUSED BY OTHERS -> FULL CASCADE
+                
+                // Check GLOBAL order restriction across entire platform
+                $hasGlobalOrders = OrderItem::where('product_id', $product_id)->exists();
+
+                if ($hasGlobalOrders) {
+                    throw new \Exception('GLOBAL_ORDER_RESTRICTION');
+                }
+
+                $catalogImagePath = $globalProduct->catalog_image;
+
+                $localImagePaths = ShopProduct::withTrashed()
+                    ->where('product_id', $product_id)
+                    ->whereNotNull('local_image')
+                    ->pluck('local_image')
+                    ->toArray();
+
+                ShopProduct::withTrashed()
+                    ->where('product_id', $product_id)
+                    ->forceDelete();
+
+                $globalProduct->forceDelete();
+
+                if ($catalogImagePath) {
+                    $this->purgeFiles($catalogImagePath);
+                }
+
+                foreach ($localImagePaths as $localPath) {
+                    if ($localPath) {
+                        $this->purgeFiles($localPath);
+                    }
+                }
+            });
+
+            if ($wasTransferred) {
+                $message = 'Product unlinked from your shop and local media purged. Global catalog ownership transferred to Super-Admin.';
+            } else {
+                $message = 'Global product, associated shop listings, and storage files permanently purged platform-wide.';
+            }
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => $message
+            ], 200);
+
+        } catch (\Exception $e) {
+            if ($e->getMessage() === 'LOCAL_ORDER_RESTRICTION') {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Cannot permanently remove product from your shop because customer orders depend on your local inventory history.'
+                ], 422);
+            }
+
+            if ($e->getMessage() === 'GLOBAL_ORDER_RESTRICTION') {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Cannot permanently delete global product because historical customer orders depend on it platform-wide.'
+                ], 422);
+            }
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'An unexpected server error occurred during permanent deletion.'
+            ], 500);
+        }
+    }
     private function purgeFiles(?string ...$files): void
     {
             foreach ($files as $file) {
