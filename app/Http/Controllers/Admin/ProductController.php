@@ -226,7 +226,6 @@ class ProductController extends Controller
         }
     }
     
-
     public function index(Request $request)
     {
         $shopId = $request->active_shop?->id;
@@ -244,7 +243,6 @@ class ProductController extends Controller
             $term = trim($request->input('q'));
 
             $query->where(function ($subQuery) use ($term) {
-                // Numeric IDs only (Exact match)
                 if (is_numeric($term)) {
                     $subQuery->orWhere('id', $term)
                             ->orWhere('product_id', $term);
@@ -259,15 +257,14 @@ class ProductController extends Controller
             });
         }
 
-        // =========================================================================
+        
         // 2. DEDICATED PRICE FILTERS (Exact Price & Price Range)
-        // =========================================================================
-        // Exact price match (e.g., ?price=299)
+        
         if ($request->filled('price')) {
             $query->where('price', (float) $request->input('price'));
         }
 
-        // Price range filters (e.g., ?min_price=100&max_price=500)
+       
         if ($request->filled('min_price')) {
             $query->where('price', '>=', (float) $request->input('min_price'));
         }
@@ -276,9 +273,9 @@ class ProductController extends Controller
             $query->where('price', '<=', (float) $request->input('max_price'));
         }
 
-        // =========================================================================
+        
         // 3. QUICK ADMINISTRATIVE STATUS TABS
-        // =========================================================================
+        
         if ($request->filled('status')) {
             match ($request->input('status')) {
                 'out_of_stock' => $query->where('stock', '<=', 0),
@@ -289,9 +286,9 @@ class ProductController extends Controller
             };
         }
 
-        // =========================================================================
+        
         // 4. CATEGORY & BRAND DROPDOWN FILTERS
-        // =========================================================================
+        
         if ($request->filled('category_id')) {
             $query->whereHas('product', fn($q) => $q->where('category_id', $request->input('category_id')));
         }
@@ -300,9 +297,9 @@ class ProductController extends Controller
             $query->whereHas('product', fn($q) => $q->where('brand_id', $request->input('brand_id')));
         }
 
-        // =========================================================================
+        
         // 5. SORTING & PAGINATION
-        // =========================================================================
+        
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = strtolower($request->input('sort_order')) === 'asc' ? 'asc' : 'desc';
         
@@ -321,20 +318,26 @@ class ProductController extends Controller
         ]);
     }
 
-    public function getProduct(Request $request,$product_id)
+    public function getProduct(Request $request, $id)
     {
         $shopId = $request->active_shop?->id;
         if (!$shopId) {
             return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
         }
 
-        $shopProduct = ShopProduct::with('product')
+        $shopProduct = ShopProduct::with(['product.category', 'product.brand'])
             ->where('shop_id', $shopId)
-            ->where('product_id', $product_id)
+            ->where(function ($query) use ($id) {
+                $query->where('id', $id)            
+                    ->orWhere('product_id', $id); 
+            })
             ->first();
 
         if (!$shopProduct) {
-            return response()->json(['message' => 'Product inventory record not found.'], 404);
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Product inventory record not found.'
+            ], 404);
         }
 
         return response()->json([
@@ -343,74 +346,133 @@ class ProductController extends Controller
         ]);
     }
 
-    public function updateProduct(Request $request, $product_id)
+    public function updateShopProduct(Request $request, $id)
     {
         $shopId = $request->active_shop?->id;
         if (!$shopId) {
             return response()->json(['status' => 'error', 'message' => 'Shop scope missing.'], 400);
         }
-        $shopProduct = ShopProduct::where('shop_id', $shopId)
-                ->where('product_id', $product_id)
-                ->first();
 
-                if (!$shopProduct) {
-                    return response()->json([
-                        'status'  => 'error',
-                        'message' => 'Product inventory record not found.'
-                    ], 404);
-                }
+        $shopProduct = ShopProduct::where('shop_id', $shopId)
+            ->where(function ($q) use ($id) {
+                $q->where('id', $id)->orWhere('product_id', $id);
+            })
+            ->first();
+
+        if (!$shopProduct) {
+            return response()->json(['status' => 'error', 'message' => 'Shop inventory record not found.'], 404);
+        }
+
         try {
-             $validatedData = $request->validate([
-                    'price'        => 'sometimes|required|numeric|min:0',
-                    'sale_price'   => ['nullable', 'numeric', 'min:0',function ($attribute, $value, $fail) use ($request, $shopProduct) {
-                                                                            $currentPrice = $request->filled('price') ? $request->input('price') : $shopProduct->price;
-                                                                            if (is_numeric($currentPrice) && $value >= $currentPrice) {
-                                                                                $fail('The sale price must be less than the regular price.');
-                                                                            }
-                                                                        }],
-                    'stock'        => 'sometimes|required|integer|min:0',
-                    'min_order'    => 'integer|min:1',
-                    'max_order'    => ['nullable','integer', function ($attribute, $value, $fail) use ($request, $shopProduct) {
-                                                                    $minOrder = $request->filled('min_order') ? $request->input('min_order') : $shopProduct->min_order;
-                                                                    if (is_numeric($minOrder) && $value <= $minOrder) {
-                                                                        $fail('The max order must be greater than the minimum order.');
-                                                                    }
-                                                                }],
-                    'is_available' => 'boolean',
-                    'sale_start'   => 'nullable|date',
-                    'sale_end'     => 'nullable|date|required_with:sale_start|after:sale_start',
-                ]);
-            $shopProduct = DB::transaction(function () use ($validatedData, $shopProduct, $request){
-                if(array_key_exists('stock', $validatedData)&&(int)$validatedData['stock'] !== (int)$shopProduct->stock){
-                    $shopProduct->last_stock_update = now();  
+            $validatedData = $request->validate([
+                'price'        => 'sometimes|required|numeric|min:0',
+                'sale_price'   => [
+                    'nullable', 'numeric', 'min:0',
+                    function ($attribute, $value, $fail) use ($request, $shopProduct) {
+                        $currentPrice = $request->filled('price') ? $request->input('price') : $shopProduct->price;
+                        if (is_numeric($currentPrice) && $value >= $currentPrice) {
+                            $fail('The sale price must be less than the regular price.');
+                        }
+                    }
+                ],
+                'stock'        => 'sometimes|required|integer|min:0',
+                'min_order'    => 'integer|min:1',
+                'max_order'    => [
+                    'nullable', 'integer',
+                    function ($attribute, $value, $fail) use ($request, $shopProduct) {
+                        $minOrder = $request->filled('min_order') ? $request->input('min_order') : $shopProduct->min_order;
+                        if (is_numeric($minOrder) && $value <= $minOrder) {
+                            $fail('The max order must be greater than the minimum order.');
+                        }
+                    }
+                ],
+                'local_image'  => 'nullable|string|max:255',
+                'is_available' => 'boolean',
+                'sale_start'   => 'nullable|date',
+                'sale_end'     => 'nullable|date|required_with:sale_start|after:sale_start',
+            ]);
+
+            $updatedProduct = DB::transaction(function () use ($validatedData, $shopProduct) {
+
+                if (array_key_exists('stock', $validatedData) && (int) $validatedData['stock'] !== (int) $shopProduct->stock) {
+                    $shopProduct->last_stock_update = now();
                 }
-                if ($request->has('price'))         $shopProduct->price = $request->input('price');
-                if ($request->has('sale_price'))    $shopProduct->sale_price = $request->input('sale_price');
-                if ($request->has('stock'))         $shopProduct->stock = $request->input('stock');
-                if ($request->has('min_order'))     $shopProduct->min_order = $request->input('min_order');
-                if ($request->has('max_order'))     $shopProduct->max_order = $request->input('max_order');
-                if ($request->has('is_available'))  $shopProduct->is_available = $request->input('is_available');
-                if ($request->has('sale_start'))    $shopProduct->sale_start = $request->input('sale_start');
-                if ($request->has('sale_end'))      $shopProduct->sale_end = $request->input('sale_end');
+
+                $shopProduct->fill($validatedData);
                 $shopProduct->save();
-                return $shopProduct;
+
+                return $shopProduct->load(['product.category', 'product.brand']);
             });
 
             return response()->json([
-                'status' => 'success',
-                'message' => 'Inventory changes saved successfully.',
-                'data' => $shopProduct
+                'status'  => 'success',
+                'message' => 'Shop inventory updated successfully.',
+                'data'    => $updatedProduct
             ]);
-        }   catch (ValidationException $e) {
+
+        } catch (ValidationException $e) {
+            return response()->json(['status' => 'error', 'errors' => $e->errors()], 422);
+        } catch (Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'An unexpected server error occurred.'], 500);
+        }
+    }
+
+    public function updateGlobalProduct(Request $request, $productId)
+    {
+        $product = Product::find($productId);
+        if (!$product) {
+            return response()->json(['status' => 'error', 'message' => 'Global catalog product not found.'], 404);
+        }
+
+        $user = $request->user();
+        $activeShopId = $request->active_shop?->id;
+        $isSuperAdmin = $user && $user->hasRole('super-admin');
+
+        // Ownership Check: User can update IF they are a Super Admin OR if the product belongs to their current shop & creator
+        $isCreatorOwner = $activeShopId 
+            && (int) $product->shop_id === (int) $activeShopId 
+            && (int) $product->creator_id === (int) $user->id;
+
+        if (!$isSuperAdmin && !$isCreatorOwner) {
             return response()->json([
-                'status' => 'error',
-                'errors' => $e->errors()
-            ], 422);
-        }   catch (Exception $e) {
+                'status'  => 'error', 
+                'message' => 'Unauthorized. You can only update global products created by your shop.'
+            ], 403);
+        }
+
+        try {
+            $validatedData = $request->validate([
+                'category_id'   => 'sometimes|required|exists:categories,id',
+                'brand_id'      => 'nullable|exists:brands,id',
+                'name'          => 'sometimes|required|string|max:255',
+                'sku'           => 'nullable|string|max:100|unique:products,sku,' . $product->id,
+                'unit'          => 'nullable|string|max:50',
+                'description'   => 'nullable|string',
+                'catalog_image' => 'nullable|string|max:255',
+                'video_url'     => 'nullable|url|max:255',
+                'attributes'    => 'nullable|array',
+                'has_variants'  => 'boolean',
+                // Only Super-Admins should be able to toggle verification status
+                'is_verified'   => $isSuperAdmin ? 'boolean' : 'prohibited', 
+            ]);
+
+            // Automatically update slug if name is updated
+            if (isset($validatedData['name']) && $validatedData['name'] !== $product->name) {
+                $validatedData['slug'] = Str::slug($validatedData['name']) . '-' . $product->id;
+            }
+
+            $product->update($validatedData);
+
             return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected server error occurred during update.'
-            ], 500);
+                'status'  => 'success',
+                'message' => 'Global product updated successfully.',
+                'data'    => $product->load(['category', 'brand'])
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json(['status' => 'error', 'errors' => $e->errors()], 422);
+        } catch (Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'An unexpected server error occurred.'], 500);
         }
     }
 
@@ -426,43 +488,49 @@ class ProductController extends Controller
             ->first();
 
         if (!$shopProduct) {
-            return response()->json(['message' => 'Product records not found.'], 404);
+            return response()->json(['status' => 'error', 'message' => 'Shop product record not found.'], 404);
         }
 
-        $request->validate([
-            'local_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
-        ]);
-
-        if ($request->hasFile('local_image')) {
-            $oldImage = $shopProduct->local_image;
-    
-            $file= $request->file('local_image');
-            $fileName = 'shop_' . $shopId . '_prod_' . $product_id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $path = $file->storeAs('shops/shop_products', $fileName, 'public');
-            $shopProduct->local_image = $path;
-            $shopProduct->save();
-
-            if ($oldImage) {
-                $this->purgeFiles($oldImage);
-            }
-            return response()->json([
-                'status'    => 'success',
-                'message'   => 'Storefront product image asset updated.',
-                'image_url' => asset('storage/' . $path)
+        try {
+            $request->validate([
+                'local_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
             ]);
-        }
 
-        return response()->json(['message' => 'File transfer error.'], 400);
+            if ($request->hasFile('local_image')) {
+                $oldImage = $shopProduct->local_image;
+                
+                $path = $request->file('local_image')->store('shops/shop_products', 'public');
+                $shopProduct->local_image = $path;
+                $shopProduct->save();
+
+                if ($oldImage) {
+                    $this->purgeFiles($oldImage);
+                }
+
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Storefront product image asset updated.',
+                    'data'    => [
+                        'local_image' => $path,
+                        'image_url'   => asset('storage/' . $path)
+                    ]
+                ]);
+            }
+
+            return response()->json(['status' => 'error', 'message' => 'No image file was uploaded.'], 400);
+
+        } catch (ValidationException $e) {
+            return response()->json(['status' => 'error', 'errors' => $e->errors()], 422);
+        } catch (Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'An unexpected server error occurred during upload.'], 500);
+        }
     }
-    /**
-     * Update the global catalog master image asset.
-     * Accessible only if the product belongs to the global catalog pool 
-     * or is authorized under your platform's master-catalog rules.
-     */
+
     public function updateCatalogImage(Request $request, $product_id)
     {
-        $shop = $request->active_shop;
-        $shopId = $shop ? $shop->id : null;
+        $user = $request->user();
+        $activeShopId = $request->active_shop?->id;
+        $isSuperAdmin = $user && $user->hasRole('super-admin');
 
         $product = Product::find($product_id);
 
@@ -473,47 +541,57 @@ class ProductController extends Controller
             ], 404);
         }
 
-        // CORRECTED GUARD: Allow superadmin (where shop_id and $shopId are both null)
-        if ($product->shop_id !== null && $product->shop_id !== $shopId) {
+        
+        $isGlobalSuperAdminAsset = $isSuperAdmin && $product->shop_id === null;
+        $isCreatorOwner = $activeShopId 
+            && (int) $product->shop_id === (int) $activeShopId 
+            && (int) $product->creator_id === (int) $user->id;
+
+        if (!$isGlobalSuperAdminAsset && !$isCreatorOwner) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Unauthorized. You cannot modify a master catalog asset owned by another entity.'
+                'message' => 'Unauthorized. You can only update catalog assets for products created by your entity.'
             ], 403);
         }
 
-        // If it's a global asset (shop_id is null) but a regular merchant ($shopId is set) tries to touch it:
-        if ($product->shop_id === null && $shopId !== null) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Unauthorized. Only platform superadmins can modify global master catalog assets.'
-            ], 403);
-        }
+        try {
+            $request->validate([
+                'catalog_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
+            ]);
 
-        $request->validate([
-            'catalog_image' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
-        ]);
+            if ($request->hasFile('catalog_image')) {
+                $oldImage = $product->catalog_image;
 
-        if ($request->hasFile('catalog_image')) {
-            $oldImage = $product->catalog_image;
-            $file = $request->file('catalog_image');
-            $catFileName = 'catalog_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            
-            $path = $file->storeAs('products/catalog', $catFileName, 'public');
-            $product->catalog_image = $path;
-            $product->save();
+                $path = $request->file('catalog_image')->store('products/catalog', 'public');
 
-            if ($oldImage) {
-                $this->purgeFiles($oldImage);
+                $product->catalog_image = $path;
+                $product->save();
+
+                
+                if ($oldImage) {
+                    $this->purgeFiles($oldImage);
+                }
+
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Global master catalog image asset updated.',
+                    'data'    => [
+                        'catalog_image' => $path,
+                        'image_url'     => asset('storage/' . $path)
+                    ]
+                ]);
             }
 
-            return response()->json([
-                'status'    => 'success',
-                'message'   => 'Global master catalog image asset updated.',
-                'image_url' => asset('storage/' . $path)
-            ]);
-        }
+            return response()->json(['status' => 'error', 'message' => 'No image file was uploaded.'], 400);
 
-        return response()->json(['message' => 'File transfer error.'], 400);
+        } catch (ValidationException $e) {
+            return response()->json(['status' => 'error', 'errors' => $e->errors()], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'An unexpected server error occurred during catalog image upload.'
+            ], 500);
+        }
     }
     
     public function deleteProduct(Request $request, $product_id)
