@@ -48,20 +48,29 @@ Route::prefix('admin')->group(function (){
                     Route::get('/toggle-status',[DashboardController::class, 'toggleShopStatus']);
                 });
                 Route::prefix('shop')->group(function () 
-                {
+                {   
+                    Route::get('/all', [ShopController::class, 'index']);
                     Route::get('/profile', [ShopController::class, 'show']);         
                     Route::put('/profile', [ShopController::class, 'update']);        
-                    Route::post('/profile/branding', [ShopController::class, 'updateBranding']);   
+                    Route::post('/profile/branding', [ShopController::class, 'updateBranding']);  
+                    Route::delete('/profile', [ShopController::class, 'destroy']);
+                    Route::delete('/profile/force',[ShopController::class, 'forceDelete']);
                 });
                 Route::prefix('products')->group(function()
                 {
                     Route::post('/store',[ProductController::class, 'store']);
                     Route::get('/all',[ProductController::class, 'index']);
-                    Route::get('/{product_id}', [ProductController::class, 'getProduct']);
-                    Route::put('/update/{product_id}', [ProductController::class, 'updateProduct']);
-                    Route::post('/update_product_image/{product_id}', [ProductController::class, 'updateProductImage']);
-                    Route::delete('/delete/{product_id}', [ProductController::class, 'deleteProduct']);
-                    Route::delete('/force-delete/{product_id}',[ProductController::class, 'forceDeleteProduct']);
+                    Route::get('/single/{product_id}', [ProductController::class, 'getProduct']);
+
+                    Route::put('/local/{id}', [ProductController::class, 'updateShopProduct']);
+                    Route::post('/local/image/{product_id}', [ProductController::class, 'updateProductImage']);
+                    Route::delete('/local/{product_id}', [ProductController::class, 'deleteShopProduct']);
+                    Route::delete('/local/force-delete/{product_id}',[ProductController::class, 'forceDeleteShopProduct']);
+
+                    Route::put('/global/{productId}', [ProductController::class, 'updateGlobalProduct']);
+                    Route::post('/global/image/{product_id}', [ProductController::class, 'updateCatalogImage']);
+                    Route::delete('/global/{product_id}', [ProductController::class, 'deleteGlobalProduct']);
+                    Route::delete('/global/force-delete/{product_id}',[ProductController::class, 'forceDeleteGlobalProduct']);
                 });
             });
         });
