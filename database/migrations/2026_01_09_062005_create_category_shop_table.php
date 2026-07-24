@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('shop_id')->constrained('shops')->onDelete('cascade');
             $table->foreignId('category_id')->constrained('categories')->onDelete('cascade');
             $table->timestamps();
+            $table->unique(['shop_id', 'category_id']);
         });
     }
 
