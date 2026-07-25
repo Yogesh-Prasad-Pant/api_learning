@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\CategoryRequestController;
+use App\Http\Controllers\Admin\CategoryController;
 
 Route::prefix('admin')->group(function (){
 
@@ -93,6 +94,14 @@ Route::prefix('admin')->group(function (){
                 Route::get('/',[CategoryRequestController::class, 'index'])->name('admin.category-requests.index');
                 Route::post('/approve/{id}', [CategoryRequestController::class, 'approve'])->name('admin.category-requests.approve');
                 Route::post('/reject/{id}', [CategoryRequestController::class, 'reject'])->name('admin.category-requests.reject');
+            });
+            Route::prefix('categories')->group(function (){
+                Route::get('/', [CategoryController::class, 'index']);
+                Route::post('/', [CategoryController::class, 'store']);
+                Route::get('/{id}', [CategoryController::class, 'show']);
+                Route::put('/{id}', [CategoryController::class, 'update']);// for  text only
+                Route::post('/{id}', [CategoryController::class, 'update']); //for image
+                Route::delete('/{id}', [CategoryController::class, 'destroy']);
             });
         });
 
