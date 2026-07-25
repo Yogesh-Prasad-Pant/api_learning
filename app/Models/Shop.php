@@ -48,7 +48,7 @@ class Shop extends Model
     }
 
     public function categories(){
-        return $this->belongsToMany(Category::class, 'category_shop');
+        return $this->belongsToMany(Category::class, 'category_shop')->withTimestamps();
     }
     public function scopeNear($query, $latitude, $longitude, $radiusInKm = 10)
      {

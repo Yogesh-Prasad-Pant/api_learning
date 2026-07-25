@@ -49,6 +49,20 @@ class Category extends Model
             $category->depth = ($parentDepth ?? 0) + 1;
         }
     });
+    static::updating(function ($category) {
+            if ($category->isDirty('slug') && empty($category->slug)) {
+                $category->slug = Str::slug($category->name);
+            }
+
+            if ($category->isDirty('parent_id')) {
+                if ($category->parent_id) {
+                    $parentDepth = static::where('id', $category->parent_id)->value('depth');
+                    $category->depth = ($parentDepth ?? 0) + 1;
+                } else {
+                    $category->depth = 0;
+                }
+            }
+        });
 }
     public function parent(){
         return $this->belongsTo(Category::class, 'parent_id');
@@ -57,12 +71,14 @@ class Category extends Model
         return $this->hasMany(Category::class, 'parent_id')->orderBy('order_priority', 'asc');
     }
     public function shops(){
-        return $this->belongsToMany(Shop::class, 'category_shop');
+        return $this->belongsToMany(Shop::class, 'category_shop')->withTimestamps();
     }
     public function allChildren()
     {
         return $this->children()->with('allChildren');
     }
+
+
     public function isRoot(): bool
     {
         return is_null($this->parent_id);
@@ -73,7 +89,6 @@ class Category extends Model
     {
         return $this->parent()->with('allParents');
     }
-
     // Recursive Commission logic
     public function getEffectiveCommissionAttribute(): float
     {

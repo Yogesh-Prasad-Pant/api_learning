@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AdminManagementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ShopController;
+use App\Http\Controllers\Admin\CategoryRequestController;
 
 Route::prefix('admin')->group(function (){
 
@@ -32,32 +33,32 @@ Route::prefix('admin')->group(function (){
             Route::post('/update-image',[AdminAuthController::class, 'updateImage']);
             Route::delete('/delete',[AdminManagementController::class, 'deleteAdmin']);
             Route::post('/upload-kyc', [AdminAuthController::class, 'uploadKyc']);
-            Route::prefix('dashboard')->group(function()
-            {
-                Route::get('/index', [DashboardController::class, 'index']);
-            });
+            
             Route::get('/shops', [ShopController::class, 'index']);
             Route::post('/shops', [ShopController::class, 'store']);
-            Route::middleware(['assign_shop'])->group(function ()
-            {
-                Route::prefix('dashboard')->group(function()
-                {
+            Route::middleware(['assign_shop'])->group(function (){
+                Route::prefix('dashboard')->group(function(){
                     Route::get('/stats', [DashboardController::class, 'getStats']);
                     Route::get('/chart', [DashboardController::class, 'getChartData']);
                     Route::get('/orders', [DashboardController::class, 'getRecentOrders']);
                     Route::get('/toggle-status',[DashboardController::class, 'toggleShopStatus']);
                 });
-                Route::prefix('shop')->group(function () 
-                {   
+                Route::prefix('shop')->group(function (){   
                     Route::get('/all', [ShopController::class, 'index']);
                     Route::get('/profile', [ShopController::class, 'show']);         
                     Route::put('/profile', [ShopController::class, 'update']);        
                     Route::post('/profile/branding', [ShopController::class, 'updateBranding']);  
                     Route::delete('/profile', [ShopController::class, 'destroy']);
                     Route::delete('/profile/force',[ShopController::class, 'forceDelete']);
+
+                    Route::prefix('category-requests')->group(function (){
+                        Route::get('/my-requests', [CategoryRequestController::class, 'myShopRequest'])->name('shop.category-requests.my-requests');
+                        Route::post('/',[CategoryRequestController::class, 'store'])->name('shop.category-requests.store');
+                        Route::put('/{id}', [CategoryRequestController::class, 'update'])->name('shop.category-requests.update');
+                        Route::delete('/{id}', [CategoryRequestController::class, 'destroy'])->name('shop.category-requests.destroy');
+                    });
                 });
-                Route::prefix('products')->group(function()
-                {
+                Route::prefix('products')->group(function(){
                     Route::post('/store',[ProductController::class, 'store']);
                     Route::get('/all',[ProductController::class, 'index']);
                     Route::get('/single/{product_id}', [ProductController::class, 'getProduct']);
@@ -73,6 +74,9 @@ Route::prefix('admin')->group(function (){
                     Route::delete('/global/force-delete/{product_id}',[ProductController::class, 'forceDeleteGlobalProduct']);
                 });
             });
+            Route::prefix('dashboard')->group(function(){
+                Route::get('/index', [DashboardController::class, 'index']);
+            });
         });
     // Routes that only super_admin can access
         Route::middleware(['auth:admin','super_admin'])->group(function()
@@ -85,6 +89,11 @@ Route::prefix('admin')->group(function (){
             Route::delete('/delete/{id}',[AdminManagementController::class, 'deleteAdmin'])->name('admin.delete');
             Route::delete('/force-delete/{id}',[AdminManagementController::class, 'forceDeleteAdmin']);
             Route::post('/restore/{id}',[AdminManagementController::class, 'restoreAdmin']);
+            Route::prefix('category-requests')->group(function (){
+                Route::get('/',[CategoryRequestController::class, 'index'])->name('admin.category-requests.index');
+                Route::post('/approve/{id}', [CategoryRequestController::class, 'approve'])->name('admin.category-requests.approve');
+                Route::post('/reject/{id}', [CategoryRequestController::class, 'reject'])->name('admin.category-requests.reject');
+            });
         });
 
 });  
