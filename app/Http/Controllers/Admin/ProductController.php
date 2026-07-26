@@ -40,8 +40,8 @@ class ProductController extends Controller
             
             // Base catalog specifications (Required if creating a new global product)
             'name'          => 'required_without:product_id|nullable|string|max:255',
-            'category_id'   => 'required_without:product_id|nullable|exists:categories,id',
-            'brand_id'      => 'required_without:product_id|nullable|exists:brands,id',
+            'category_id'   => 'nullable|exists:categories,id',
+            'brand_id'      => 'nullable|exists:brands,id',
             'unit'          => 'required_without:product_id|nullable|string|max:50',
             'description'   => 'nullable|string',
             'video_url'     => 'nullable|url',
@@ -74,8 +74,8 @@ class ProductController extends Controller
                 
                 $product = new Product();
                 $product->shop_id       = null;
-                $product->category_id   = $validatedData['category_id'];
-                $product->brand_id      = $validatedData['brand_id'];
+                $product->category_id   = $validatedData['category_id'] ?? null;
+                $product->brand_id      = $validatedData['brand_id'] ?? null;
                 $product->name          = $validatedData['name'];
                 $product->description   = $validatedData['description'] ?? null;
                 $product->video_url     = $validatedData['video_url'] ?? null;
@@ -169,8 +169,8 @@ class ProductController extends Controller
                     
                     $product = new Product();
                     $product->shop_id       = $shopId;
-                    $product->category_id   = $validatedData['category_id'];
-                    $product->brand_id      = $validatedData['brand_id'];
+                    $product->category_id   = $validatedData['category_id'] ?? null;
+                    $product->brand_id      = $validatedData['brand_id'] ?? null;
                     $product->name          = $validatedData['name'];
                     $product->description   = $validatedData['description'] ?? null;
                     $product->video_url     = $validatedData['video_url'] ?? null;
@@ -373,12 +373,11 @@ class ProductController extends Controller
                     'nullable', 'integer',
                     function ($attribute, $value, $fail) use ($request, $shopProduct) {
                         $minOrder = $request->filled('min_order') ? $request->input('min_order') : $shopProduct->min_order;
-                        if (is_numeric($minOrder) && $value <= $minOrder) {
+                        if (!is_null($value) && is_numeric($minOrder) && $value <= $minOrder) {
                             $fail('The max order must be greater than the minimum order.');
                         }
                     }
                 ],
-                'local_image'  => 'nullable|string|max:255',
                 'is_available' => 'boolean',
                 'sale_start'   => 'nullable|date',
                 'sale_end'     => 'nullable|date|required_with:sale_start|after:sale_start',
@@ -434,13 +433,12 @@ class ProductController extends Controller
 
         try {
             $validatedData = $request->validate([
-                'category_id'   => 'sometimes|required|exists:categories,id',
+                'category_id'   => 'nullable|exists:categories,id',
                 'brand_id'      => 'nullable|exists:brands,id',
                 'name'          => 'sometimes|required|string|max:255',
                 'sku'           => 'nullable|string|max:100|unique:products,sku,' . $product->id,
                 'unit'          => 'nullable|string|max:50',
                 'description'   => 'nullable|string',
-                'catalog_image' => 'nullable|string|max:255',
                 'video_url'     => 'nullable|url|max:255',
                 'attributes'    => 'nullable|array',
                 'has_variants'  => 'boolean',
