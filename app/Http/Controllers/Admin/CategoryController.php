@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Category;
 use Illuminate\Support\Facades\Storage;
+use App\Http\Resources\CategoryResource;
 
 class CategoryController extends Controller
 {   
@@ -13,10 +14,12 @@ class CategoryController extends Controller
     {
         $query = Category::with('parent', 'children');
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where('name', 'LIKE', "%{$search}%")
-                  ->orWhere('slug', 'LIKE', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                ->orWhere('slug', 'LIKE', "%{$search}%");
+            });
         }
 
         if ($request->has('is_active')) {
@@ -35,6 +38,32 @@ class CategoryController extends Controller
             'data'    => $categories,
         ], 200);
     }
+    public function getCategories(Request $request)
+    {
+        $query = Category::where('is_active', true)->with('parent', 'children');
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                ->orWhere('slug', 'LIKE', "%{$search}%");
+            });
+        }
+
+        if ($request->boolean('root_only')) {
+            $query->whereNull('parent_id');
+        }
+
+        $categories = $request->boolean('all')
+            ? $query->orderBy('order_priority', 'asc')->latest()->get()
+            : $query->orderBy('order_priority', 'asc')->latest()->paginate($request->input('per_page', 15));
+
+        // CategoryResource strips out commission_rate, is_active, etc. for all categories & children
+        return CategoryResource::collection($categories)->additional([
+            'success' => true,
+            'message' => 'Public categories retrieved successfully.',
+        ]);
+    }
     public function store(Request $request)
     {
         $validated = $this->validateCategory($request);
@@ -52,19 +81,16 @@ class CategoryController extends Controller
             'data'    => $category->load('parent')
         ], 201);
     }
-    public function show($id)
+    public function show(Category $category)
     {
-        $category = Category::with(['parent', 'children'])->findOrFail($id);
-
         return response()->json([
             'success' => true,
-            'data'    => $category
+            'data'    => $category->load(['parent', 'children'])
         ], 200);
     }
-    public function update(Request $request, $id)
+    public function update(Request $request, Category $category)
     {
-        $category = Category::findOrFail($id);
-        $validated = $this->validateCategory($request, $id);
+        $validated = $this->validateCategory($request, $category->id);
 
         $this->handleMediaUploads($request, $validated, $category);
 
@@ -78,10 +104,8 @@ class CategoryController extends Controller
             'data'    => $category->load('parent')
         ], 200);
     }
-    public function destroy($id)
+    public function destroy(Category $category)
     {
-        $category = Category::findOrFail($id);
-
         // Delete all attached media files
         $this->deleteMediaFile($category->image);
         $this->deleteMediaFile($category->banner);
@@ -147,6 +171,9 @@ class CategoryController extends Controller
         }
         if ($request->has('is_featured')) {
             $category->is_featured = $request->boolean('is_featured');
+        }
+        if ($request->has('is_menu')) {
+            $category->is_menu = $request->boolean('is_menu');
         }
         if ($request->has('commission_rate')) {
             $category->commission_rate = $request->input('commission_rate');

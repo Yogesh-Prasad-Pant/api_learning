@@ -98,14 +98,14 @@ Route::prefix('admin')->group(function (){
             Route::prefix('categories')->group(function (){
                 Route::get('/', [CategoryController::class, 'index']);
                 Route::post('/', [CategoryController::class, 'store']);
-                Route::get('/{id}', [CategoryController::class, 'show']);
-                Route::put('/{id}', [CategoryController::class, 'update']);// for  text only
-                Route::post('/{id}', [CategoryController::class, 'update']); //for image
-                Route::delete('/{id}', [CategoryController::class, 'destroy']);
+                Route::get('/{category}', [CategoryController::class, 'show']);
+                Route::post('/{category}', [CategoryController::class, 'update']); //for image
+                Route::delete('/{category}', [CategoryController::class, 'destroy']);
             });
         });
 
-});  
+});
+Route::get('/categories', [CategoryController::class, 'getCategories']);
 
 
 Route::get('/user', function (Request $request) {
