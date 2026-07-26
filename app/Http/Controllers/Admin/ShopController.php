@@ -26,7 +26,6 @@ class ShopController extends Controller
         ]);
         
     }
-
     public function store(Request $request)
     {
         $validatedData = $request->validate([
@@ -80,7 +79,6 @@ class ShopController extends Controller
             'data'   => $shop
         ]);
     }
-
     public function update(Request $request)
     {
         $shop = $request->active_shop;

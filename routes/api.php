@@ -10,6 +10,32 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\CategoryRequestController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Customer\CustomerAddressController;
+use App\Http\Controllers\Customer\CustomerAuthController;
+use App\Http\Controllers\Customer\CustomerController;
+
+Route::prefix('customer')->group(function () {
+    Route::post('/register', [CustomerAuthController::class, 'register']);
+    Route::middleware('throttle:5,1')->group(function () {
+        Route::post('/login', [CustomerAuthController::class, 'login']);
+        Route::post('/forgot-password', [CustomerAuthController::class, 'forgotPassword']);
+    });
+    Route::post('/reset-password', [CustomerAuthController::class, 'resetPassword']);
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/logout', [CustomerAuthController::class, 'logout']);
+        Route::get('/profile', [CustomerController::class, 'profile']);
+        Route::post('/profile', [CustomerController::class, 'updateProfile']);
+        Route::post('/deactivate', [CustomerController::class, 'deactivateAccount']);
+        Route::prefix('addresses')->group(function () {
+            Route::get('/', [CustomerAddressController::class, 'index']);
+            Route::post('/', [CustomerAddressController::class, 'store']);
+            Route::put('/{customerAddress}', [CustomerAddressController::class, 'update']);
+            Route::patch('/default/{customerAddress}', [CustomerAddressController::class, 'setDefault']);
+            Route::delete('/{customerAddress}', [CustomerAddressController::class, 'destroy']);
+
+        });
+    });
+});
 
 Route::prefix('admin')->group(function (){
 
@@ -108,9 +134,9 @@ Route::prefix('admin')->group(function (){
 Route::get('/categories', [CategoryController::class, 'getCategories']);
 
 
-Route::get('/user', function (Request $request) {
-        return $request->user();
-    })->middleware('auth:sanctum');
+// Route::get('/user', function (Request $request) {
+//         return $request->user();
+//     })->middleware('auth:sanctum');
 
 
 
