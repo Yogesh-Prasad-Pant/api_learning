@@ -11,27 +11,52 @@ class Order extends Model
     protected $fillable = [
         'shop_id', 
         'user_id',
-        'subtotal',
-        'tax', 
+        'order_number',
+
+        'subtotal', 
         'shipping_cost',
         'discount_amount',
         'total_price',
+        'commission_rate',
+        'commission_amount',
+        'vendor_earning',
+
         'status',
         'payment_status',
         'payment_method',
         'transaction_id',
+
+        'customer_name',
+        'customer_phone',
         'shipping_address',
+        'billing_address',
+
         'tracking_number',
         'delivered_at',
-        'admin_note'
+        'cancelled_at',
+        
+        'customer_note',
+        'admin_note',
     ];
-
+    protected $casts = [
+        'subtotal' => 'decimal:2',
+        'shipping_cost' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'total_price' => 'decimal:2',
+        'commission_rate' => 'decimal:2',
+        'commission_amount' => 'decimal:2',
+        'vendor_earning' => 'decimal:2',
+        'shipping_address' => 'array', // Automatically decodes JSON to array
+        'billing_address' => 'array',  // Automatically decodes JSON to array
+        'delivered_at' => 'datetime',  // Converts string to Carbon date instance
+        'cancelled_at' => 'datetime',
+    ];
     public function shop()
     {
         return $this->belongsTo(Shop::class);
     }
     public function user(){
-        return $this->belognsTo(User::class);
+        return $this->belongsTo(User::class);
     }
     public function items(){
         return $this->hasMany(OrderItem::class);

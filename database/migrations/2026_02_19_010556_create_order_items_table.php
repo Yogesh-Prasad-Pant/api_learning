@@ -14,11 +14,22 @@ return new class extends Migration
         Schema::create('order_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained('orders')->onDelete('cascade');
-            $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
+            
+            // Product Reference (Set null on delete so history isn't lost if product is wiped)
+            $table->foreignId('product_id')->nullable()->constrained('products')->onDelete('set null');
+            
+            // Immutable Snapshots
+            $table->string('product_name');
+            $table->string('product_sku')->nullable();
+            
+            // Financials & Quantities
             $table->integer('quantity');
-            $table->decimal('unit_price',15,2);
-            $table->decimal('total_item_price',15,2);
-            $table->json('attributes')->nullable();
+            $table->decimal('unit_price', 15, 2);
+            $table->decimal('total_item_price', 15, 2);
+            
+            // Product Variants (Color, Size, etc.)
+            $table->json('attributes')->nullable(); 
+            
             $table->timestamps();
         });
     }
