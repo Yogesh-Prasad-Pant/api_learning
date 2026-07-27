@@ -62,5 +62,23 @@ class Order extends Model
     public function items(){
         return $this->hasMany(OrderItem::class);
     }
+    protected static function booted()
+    {
+        static::creating(function ($order) {
+            if (empty($order->order_number)) {
+                $order->order_number = static::generateUniqueOrderNumber();
+            }
+        });
+    }
+
+    protected static function generateUniqueOrderNumber(): string
+    {
+        // Timestamp + random digits is faster and collision-free
+        do {
+            $number = 'ORD-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4));
+        } while (static::where('order_number', $number)->exists());
+
+        return $number;
+    }
     //
 }
