@@ -41,7 +41,7 @@ class Product extends Model
         return $this->belongsTo(Category::class, 'category_id')->withDefault(['name' => 'Uncategorized',]);
     }
     public function images(){
-        return $this->hasMany(ProductImage::class)->orderBy('sort_order', '[asc');
+        return $this->hasMany(ProductImage::class)->orderBy('sort_order', 'asc');
 
     }
     public function brand()
@@ -54,7 +54,12 @@ class Product extends Model
         ->withPivot(['price', 'sale_price', 'stock', 'local_image', 'last_stock_update', 'is_available','sale_start','sale_end'])
         ->withTimestamps();
     }
-
+    public function creator() {
+        return $this->belongsTo(Admin::class, 'creator_id');
+    }
+    public function originShop() {
+        return $this->belongsTo(Shop::class, 'shop_id');
+    }
     
 
     //
