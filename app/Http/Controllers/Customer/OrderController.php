@@ -14,9 +14,7 @@ use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
-    /**
-     * Store new order(s) from the customer's cart.
-     */
+    
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -51,7 +49,6 @@ class OrderController extends Controller
                 $orderItemsData = [];
 
                 foreach ($items as $item) {
-                    /** @var ShopProduct $shopProduct */
                     $shopProduct = $item->shopProduct;
 
                  
@@ -129,7 +126,7 @@ class OrderController extends Controller
                     }
                 }
 
-                $createdOrders[] = $order->load('items');
+                $createdOrders[] = $order->load('orderItems');
             }
 
           
@@ -153,7 +150,7 @@ class OrderController extends Controller
     }
     public function index()
     {
-        $orders = Order::with(['shop:id,shop_name,logo', 'items'])
+        $orders = Order::with(['shop:id,shop_name,logo', 'orderItems'])
             ->where('user_id', auth()->id())
             ->latest()
             ->paginate(10);
@@ -162,7 +159,7 @@ class OrderController extends Controller
     }
     public function show($id)
     {
-        $order = Order::with(['shop', 'items'])
+        $order = Order::with(['shop', 'orderItems'])
             ->where('user_id', auth()->id())
             ->where('id', $id)
             ->firstOrFail();
