@@ -3,52 +3,39 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Admin\OrderResource;
 use App\Models\Order;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class OrderController extends Controller
 {
-    private function applyShopScope(Builder $query, Request $request, $admin): Builder
+   
+    public function index(Request $request): AnonymousResourceCollection
     {
-        if ($admin->is_superadmin && !$request->has('active_shop')) {
-            return $query;
-        }
-
-        $activeShop = $request->get('active_shop');
-
-        if ($activeShop) {
-            return $query->where('shop_id', $activeShop->id);
-        }
-
-        return $query->whereRaw('1 = 0');
-    }
-
-    public function index(Request $request): JsonResponse
-    {
-        $admin = auth('admin')->user();
-
-        $orders = Order::with(['user:id,name,email', 'orderItems'])
-            ->when($admin, fn($q) => $this->applyShopScope($q, $request, $admin))
+        $orders = Order::forShop()
+            ->with(['user:id,name,email', 'orderItems'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->latest()
             ->paginate(15);
 
-        return response()->json($orders);
+        return OrderResource::collection($orders);
     }
 
-    public function show(Request $request, string|int $id): JsonResponse
+   
+    public function show(string|int $id): OrderResource
     {
-        $admin = auth('admin')->user();
-
-        $order = Order::with(['user:id,name,email,phone', 'orderItems', 'shop:id,shop_name'])
-            ->when($admin, fn($q) => $this->applyShopScope($q, $request, $admin))
+        $order = Order::forShop()
+            ->with(['user:id,name,email,phone', 'orderItems', 'shop:id,shop_name'])
             ->findOrFail($id);
 
-        return response()->json($order);
+        $this->authorize('view', $order);
+
+        return new OrderResource($order);
     }
 
+ 
     public function updateStatus(Request $request, string|int $id): JsonResponse
     {
         $validated = $request->validate([
@@ -58,14 +45,9 @@ class OrderController extends Controller
             'admin_note'      => 'nullable|string|max:500',
         ]);
 
-        $admin = auth('admin')->user();
+        $order = Order::forShop()->findOrFail($id);
 
-        $query = Order::query();
-        $query = $this->applyShopScope($query, $request, $admin);
-
-        $order = $query->findOrFail($id);
-
-        // Handle timestamp side-effects for status changes
+        $this->authorize('update', $order);
         if (isset($validated['status'])) {
             if ($validated['status'] === 'delivered' && !$order->delivered_at) {
                 $validated['delivered_at'] = now();
@@ -78,7 +60,7 @@ class OrderController extends Controller
 
         return response()->json([
             'message' => 'Order status updated successfully.',
-            'order'   => $order->fresh(['user:id,name,email', 'orderItems']),
+            'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
         ]);
     }
 }

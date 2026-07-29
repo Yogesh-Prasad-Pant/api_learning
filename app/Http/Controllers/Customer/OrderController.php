@@ -10,11 +10,9 @@ use App\Models\Shop;
 use App\Models\ShopProduct;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
-    
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -27,21 +25,25 @@ class OrderController extends Controller
         ]);
 
         $user = auth()->user();
-        $cart = Cart::with(['items.shopProduct.product'])
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$cart || $cart->items->isEmpty()) {
-            return response()->json([
-                'message' => 'Your cart is empty.'
-            ], 400);
-        }
-        $groupedItems = $cart->items->groupBy('shop_id');
-        $createdOrders = [];
 
         DB::beginTransaction();
 
         try {
+            // Retrieve cart with row lock to prevent checkout race conditions
+            $cart = Cart::with(['items.shopProduct.product'])
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$cart || $cart->items->isEmpty()) {
+                return response()->json([
+                    'message' => 'Your cart is empty.'
+                ], 400);
+            }
+
+            $groupedItems = $cart->items->groupBy('shop_id');
+            $createdOrders = [];
+
             foreach ($groupedItems as $shopId => $items) {
                 $shop = Shop::findOrFail($shopId);
 
@@ -49,18 +51,20 @@ class OrderController extends Controller
                 $orderItemsData = [];
 
                 foreach ($items as $item) {
-                    $shopProduct = $item->shopProduct;
+                    // Lock individual shop product row to safely re-verify stock
+                    $shopProduct = ShopProduct::where('id', $item->shop_product_id)
+                        ->lockForUpdate()
+                        ->first();
 
-                 
-                    if (!$shopProduct->is_available || $shopProduct->stock < $item->quantity) {
-                        throw new \Exception("Item '{$shopProduct->product->name}' is out of stock or unavailable.");
+                    if (!$shopProduct || !$shopProduct->is_available || $shopProduct->stock < $item->quantity) {
+                        $productName = $item->shopProduct->product->name ?? 'Product';
+                        throw new \Exception("Item '{$productName}' is out of stock or unavailable.");
                     }
 
                     $unitPrice = $shopProduct->effective_price;
                     $itemTotal = $unitPrice * $item->quantity;
                     $subtotal += $itemTotal;
 
-                 
                     $orderItemsData[] = [
                         'shop_product' => $shopProduct,
                         'product_id'   => $shopProduct->product_id,
@@ -73,17 +77,15 @@ class OrderController extends Controller
                     ];
                 }
 
-              
                 $shippingCost = 0.00; 
                 $discountAmount = 0.00;
                 $totalPrice = $subtotal + $shippingCost - $discountAmount;
 
-              
                 $commissionRate = $shop->commission_rate ?? 0.00;
                 $commissionAmount = ($totalPrice * $commissionRate) / 100;
                 $vendorEarning = $totalPrice - $commissionAmount;
 
-
+                // Order model handles boot event for order_number auto-generation
                 $order = Order::create([
                     'shop_id'           => $shopId,
                     'user_id'           => $user->id,
@@ -104,7 +106,6 @@ class OrderController extends Controller
                     'customer_note'     => $validated['customer_note'] ?? null,
                 ]);
 
-              
                 foreach ($orderItemsData as $itemData) {
                     OrderItem::create([
                         'order_id'         => $order->id,
@@ -117,7 +118,7 @@ class OrderController extends Controller
                         'attributes'       => $itemData['attributes'],
                     ]);
 
-                 
+                    /** @var ShopProduct $shopProduct */
                     $shopProduct = $itemData['shop_product'];
                     $shopProduct->decrement('stock', $itemData['quantity']);
 
@@ -129,7 +130,7 @@ class OrderController extends Controller
                 $createdOrders[] = $order->load('orderItems');
             }
 
-          
+            // Delete cart items
             $cart->items()->delete();
 
             DB::commit();
@@ -148,6 +149,7 @@ class OrderController extends Controller
             ], 422);
         }
     }
+
     public function index()
     {
         $orders = Order::with(['shop:id,shop_name,logo', 'orderItems'])
@@ -157,14 +159,14 @@ class OrderController extends Controller
 
         return response()->json($orders);
     }
+
     public function show($id)
     {
-        $order = Order::with(['shop', 'orderItems'])
+        $order = Order::with(['shop:id,shop_name,logo', 'orderItems'])
             ->where('user_id', auth()->id())
             ->where('id', $id)
             ->firstOrFail();
 
         return response()->json($order);
     }
-
 }

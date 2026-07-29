@@ -408,9 +408,9 @@ class ProductController extends Controller
         }
     }
 
-    public function updateGlobalProduct(Request $request, $productId)
+    public function updateGlobalProduct(Request $request, $product_id)
     {
-        $product = Product::find($productId);
+        $product = Product::find($product_id);
         if (!$product) {
             return response()->json(['status' => 'error', 'message' => 'Global catalog product not found.'], 404);
         }

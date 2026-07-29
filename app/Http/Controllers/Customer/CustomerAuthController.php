@@ -3,15 +3,17 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\CartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
+
 class CustomerAuthController extends Controller
 {
-    public function register(Request $request): JsonResponse
+    public function register(Request $request, CartService $cartService): JsonResponse
     {
         $validated = $request->validate([
             'name'     => ['required', 'string', 'max:255'],
@@ -28,6 +30,11 @@ class CustomerAuthController extends Controller
             'status'   => 'active',
         ]);
 
+        $sessionId = $request->header('X-Session-ID') ?? $request->header('X-Guest-Token');
+        if ($sessionId) {
+            $cartService->mergeGuestCartToUser($sessionId, $user->id);
+        }
+
         $token = $user->createToken('customer_auth_token')->plainTextToken;
 
         return response()->json([
@@ -38,47 +45,39 @@ class CustomerAuthController extends Controller
         ], 201);
     }
 
-    public function login(Request $request): JsonResponse
+    public function login(Request $request, CartService $cartService): JsonResponse
     {
-        // Clean whitespace first
         $loginInput = trim($request->input('login'));
-
         $request->merge(['login' => $loginInput]);
 
-        // 1. Basic presence check
+        // 1. Basic validation
         $request->validate([
             'login'    => ['required', 'string'],
             'password' => ['required', 'string', 'min:6'],
         ]);
 
-        // 2. Distinguish input type
+        // 2. Identify credential format
         $isEmail = filter_var($loginInput, FILTER_VALIDATE_EMAIL) !== false;
         $isPhone = preg_match('/^\+?[0-9]{7,15}$/', $loginInput) === 1;
 
-        // Fail early if it is neither a valid email nor a valid phone number
         if (! $isEmail && ! $isPhone) {
             throw ValidationException::withMessages([
                 'login' => ['Please enter a valid email address or phone number.'],
             ]);
         }
 
-        // 3. Query based on detected type
-        $user = User::when($isEmail, function ($query) use ($loginInput) {
-                    return $query->where('email', $loginInput);
-                })
-                ->when($isPhone, function ($query) use ($loginInput) {
-                    return $query->where('phone', $loginInput);
-                })
-                ->first();
+        // 3. Query matching record directly
+        $field = $isEmail ? 'email' : 'phone';
+        $user  = User::where($field, $loginInput)->first();
 
-        // 4. Validate credentials
+        // 4. Verify credentials
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'login' => ['Invalid credentials provided.'],
             ]);
         }
 
-        // 5. Account status check
+        // 5. Account status check (performed BEFORE merging cart)
         if ($user->status !== 'active') {
             return response()->json([
                 'success' => false,
@@ -86,7 +85,13 @@ class CustomerAuthController extends Controller
             ], 403);
         }
 
-        // 6. Issue Sanctum Token
+        // Merge guest cart after confirming user status
+        $sessionId = $request->header('X-Session-ID') ?? $request->header('X-Guest-Token');
+        if ($sessionId) {
+            $cartService->mergeGuestCartToUser($sessionId, $user->id);
+        }
+
+        // 6. Issue Sanctum token
         $token = $user->createToken('customer_auth_token')->plainTextToken;
 
         return response()->json([
@@ -96,7 +101,6 @@ class CustomerAuthController extends Controller
             'user'    => $user->only(['id', 'name', 'email', 'phone']),
         ]);
     }
-
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();
@@ -155,7 +159,7 @@ class CustomerAuthController extends Controller
             ], 422);
         }
         $user = User::where('email', $request->email)->first();
-        $user->update(['password' => $request->password]);
+        $user->update(['password' =>Hash::make($request->password)]);
 
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
 

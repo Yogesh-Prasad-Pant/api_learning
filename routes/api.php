@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\AdminManagementController;
@@ -10,10 +11,13 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\CategoryRequestController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\OrderController as AdminOrderController;
+
 use App\Http\Controllers\Customer\CustomerAddressController;
 use App\Http\Controllers\Customer\CustomerAuthController;
 use App\Http\Controllers\Customer\CustomerController;
 use App\Http\Controllers\Customer\CartController;
+use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 
     Route::prefix('customer')->group(function () {
 
@@ -36,6 +40,11 @@ use App\Http\Controllers\Customer\CartController;
                 Route::patch('/default/{customerAddress}', [CustomerAddressController::class, 'setDefault']);
                 Route::delete('/{customerAddress}', [CustomerAddressController::class, 'destroy']);
 
+            });
+            Route::prefix('orders')->group(function () {
+                Route::get('/', [CustomerOrderController::class, 'index']);
+                Route::post('/', [CustomerOrderController::class, 'store']);
+                Route::get('/{id}',[CustomerOrderController::class, 'show']);
             });
         });
         Route::prefix('cart')->group(function () {
@@ -80,7 +89,7 @@ use App\Http\Controllers\Customer\CartController;
                         Route::get('/orders', [DashboardController::class, 'getRecentOrders']);
                         Route::get('/toggle-status',[DashboardController::class, 'toggleShopStatus']);
                     });
-                    Route::prefix('shop')->group(function (){   
+                    Route::prefix('shop')->group(function () {   
                         Route::get('/all', [ShopController::class, 'index']);
                         Route::get('/profile', [ShopController::class, 'show']);         
                         Route::put('/profile', [ShopController::class, 'update']);        
@@ -94,6 +103,11 @@ use App\Http\Controllers\Customer\CartController;
                             Route::put('/{id}', [CategoryRequestController::class, 'update'])->name('shop.category-requests.update');
                             Route::delete('/{id}', [CategoryRequestController::class, 'destroy'])->name('shop.category-requests.destroy');
                         });
+                        Route::prefix('orders')->group(function () {
+                            Route::get('/', [AdminOrderController::class, 'index']);
+                            Route::get('/{id}', [AdminOrderController::class, 'show']);
+                            Route::patch('/{id}/status', [AdminOrderController::class, 'updateStatus']);
+                        });
                     });
                     Route::prefix('products')->group(function(){
                         Route::post('/store',[ProductController::class, 'store']);
@@ -105,7 +119,7 @@ use App\Http\Controllers\Customer\CartController;
                         Route::delete('/local/{product_id}', [ProductController::class, 'deleteShopProduct']);
                         Route::delete('/local/force-delete/{product_id}',[ProductController::class, 'forceDeleteShopProduct']);
 
-                        Route::put('/global/{productId}', [ProductController::class, 'updateGlobalProduct']);
+                        Route::put('/global/{product_id}', [ProductController::class, 'updateGlobalProduct']);
                         Route::post('/global/image/{product_id}', [ProductController::class, 'updateCatalogImage']);
                         Route::delete('/global/{product_id}', [ProductController::class, 'deleteGlobalProduct']);
                         Route::delete('/global/force-delete/{product_id}',[ProductController::class, 'forceDeleteGlobalProduct']);

@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use App\Traits\HasShopScope;
 
 class Product extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes,HasShopScope;
 
     protected $fillable = [
         'category_id',

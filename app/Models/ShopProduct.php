@@ -6,16 +6,13 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-
+use App\Traits\HasShopScope;
 
 class ShopProduct extends Pivot
 {   
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasShopScope;
     protected $table = 'shop_products';
-   
     public $incrementing = true; 
-
-
     protected $fillable = [
         // 'product_id', 
         // 'shop_id', 

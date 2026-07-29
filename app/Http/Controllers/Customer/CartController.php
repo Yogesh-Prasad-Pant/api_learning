@@ -13,10 +13,23 @@ class CartController extends Controller
 {
     private function getOrCreateCart(Request $request): Cart
     {
-        if (Auth::check()) {
-            return Cart::firstOrCreate(['user_id' => Auth::id()]);
+        // 1. Check Sanctum Guard for Bearer Token
+        if (auth('sanctum')->check()) {
+            return Cart::firstOrCreate(['user_id' => auth('sanctum')->id()]);
         }
-        $sessionId = $request->header('X-Session-ID') ?? $request->session()->getId();
+
+        // 2. Fallback to Guest Header (Mandatory for Stateless API Guests)
+        $sessionId = $request->header('X-Session-ID') ?? $request->header('X-Guest-Token');
+
+        if (!$sessionId) {
+            // Optional: If you use traditional session-based SPA, fallback to request session
+            $sessionId = $request->hasSession() ? $request->session()->getId() : null;
+        }
+
+        if (!$sessionId) {
+            abort(400, 'A valid authorization token or X-Session-ID header is required.');
+        }
+
         return Cart::firstOrCreate(['session_id' => $sessionId]);
     }
 
@@ -55,24 +68,33 @@ class CartController extends Controller
     {
         $validated = $request->validate([
             'shop_product_id' => 'required|exists:shop_products,id',
-            'quantity' => 'required|integer|min:1',
-            'attributes' => 'nullable|array',
+            'quantity'        => 'required|integer|min:1',
+            'attributes'      => 'nullable|array',
         ]);
 
         $shopProduct = ShopProduct::findOrFail($validated['shop_product_id']);
-        $cart = $this->getOrCreateCart($request);
+        $cart        = $this->getOrCreateCart($request);
 
+        // Prepare attributes as array or null
+        $attributes = $validated['attributes'] ?? null;
+
+        // Find matching item in cart
         $existingItem = CartItem::where('cart_id', $cart->id)
             ->where('shop_product_id', $shopProduct->id)
-            ->where('attributes', $validated['attributes'] ?? null)
+            ->when($attributes, function ($query) use ($attributes) {
+                return $query->where('attributes', json_encode($attributes));
+            }, function ($query) {
+                return $query->whereNull('attributes');
+            })
             ->first();
-        $currentCartQty = $existingItem ? $existingItem->quantity : 0;
-        $newTotalQty = $currentCartQty + $validated['quantity'];
 
-        // 🛑 Stock Check: Ensure request doesn't exceed available product stock
+        $currentCartQty = $existingItem ? $existingItem->quantity : 0;
+        $newTotalQty    = $currentCartQty + $validated['quantity'];
+
+        // 🛑 Stock Check
         if (isset($shopProduct->stock) && $newTotalQty > $shopProduct->stock) {
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => "Cannot add item. Only {$shopProduct->stock} unit(s) available in stock (you already have {$currentCartQty} in cart).",
             ], 422);
         }    
@@ -82,18 +104,18 @@ class CartController extends Controller
             $cartItem = $existingItem;
         } else {
             $cartItem = CartItem::create([
-                'cart_id' => $cart->id,
-                'shop_id' => $shopProduct->shop_id,
+                'cart_id'         => $cart->id,
+                'shop_id'         => $shopProduct->shop_id,
                 'shop_product_id' => $shopProduct->id,
-                'quantity' => $validated['quantity'],
-                'attributes' => $validated['attributes'] ?? null,
+                'quantity'        => $validated['quantity'],
+                'attributes'      => $attributes,
             ]);
         }
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Item added to cart successfully.',
-            'data' => $cartItem->load('shopProduct'),
+            'data'    => $cartItem->load('shopProduct'),
         ], 201);
     }
     public function update(Request $request, $id)
