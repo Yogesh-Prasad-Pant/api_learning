@@ -18,6 +18,7 @@ use App\Http\Controllers\Customer\CustomerAuthController;
 use App\Http\Controllers\Customer\CustomerController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
+use App\Http\Controllers\Customer\CheckoutController;
 
     Route::prefix('customer')->group(function () {
 
@@ -33,14 +34,17 @@ use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
             Route::get('/profile', [CustomerController::class, 'profile']);
             Route::post('/profile', [CustomerController::class, 'updateProfile']);
             Route::post('/deactivate', [CustomerController::class, 'deactivateAccount']);
+           
             Route::prefix('addresses')->group(function () {
                 Route::get('/', [CustomerAddressController::class, 'index']);
                 Route::post('/', [CustomerAddressController::class, 'store']);
                 Route::put('/{customerAddress}', [CustomerAddressController::class, 'update']);
                 Route::patch('/default/{customerAddress}', [CustomerAddressController::class, 'setDefault']);
                 Route::delete('/{customerAddress}', [CustomerAddressController::class, 'destroy']);
+                Route::get('/show/{customerAddress}', [CustomerAddressController::class, 'show']);
 
             });
+            
             Route::prefix('orders')->group(function () {
                 Route::get('/', [CustomerOrderController::class, 'index']);
                 Route::post('/', [CustomerOrderController::class, 'store']);

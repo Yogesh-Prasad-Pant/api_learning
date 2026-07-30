@@ -123,4 +123,15 @@ class CustomerAddressController extends Controller
             'message' => 'Address deleted successfully.',
         ]);
     }
+    public function show(Request $request, CustomerAddress $customerAddress): JsonResponse
+    {
+        if ($customerAddress->user_id !== $request->user()->id) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized action.'], 403);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data'   => $customerAddress,
+        ]);
+    }
 }
