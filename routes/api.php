@@ -20,6 +20,8 @@ use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\Customer\CheckoutController;
 
+use App\Http\Controllers\Payment\EsewaPaymentController;
+
     Route::prefix('customer')->group(function () {
 
         Route::post('/register', [CustomerAuthController::class, 'register']);
@@ -159,7 +161,14 @@ use App\Http\Controllers\Customer\CheckoutController;
             });
 
     });
+    Route::prefix('payments/esewa')->group(function () {
+        Route::post('/initiate', [EsewaPaymentController::class, 'initiate']);
+        Route::get('/success', [EsewaPaymentController::class, 'success']);
+        Route::get('/failure', [EsewaPaymentController::class, 'failure']);
+    });
     Route::get('/categories', [CategoryController::class, 'getCategories']);
+
+    
 
 
 // Route::get('/user', function (Request $request) {
