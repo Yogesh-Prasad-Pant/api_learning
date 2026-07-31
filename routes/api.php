@@ -52,6 +52,8 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                 Route::get('/', [CustomerOrderController::class, 'index']);
                 Route::post('/', [CustomerOrderController::class, 'store']);
                 Route::get('/{id}',[CustomerOrderController::class, 'show']);
+                Route::post('/{id}/cancel', [CustomerOrderController::class, 'requestCancel']);
+                Route::post('/{id}/confirm-received', [CustomerOrderController::class, 'confirmReceived']);
             });
         });
         Route::prefix('cart')->group(function () {
@@ -117,6 +119,9 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                             Route::get('/', [AdminOrderController::class, 'index']);
                             Route::get('/{id}', [AdminOrderController::class, 'show']);
                             Route::patch('/{id}/status', [AdminOrderController::class, 'updateStatus']);
+
+                            Route::post('/{id}/approve-cancellation', [AdminOrderController::class, 'approveCancellation']);
+                            Route::post('/{id}/reject-cancellation', [AdminOrderController::class, 'rejectCancellation']);
                         });
                     });
                     Route::prefix('products')->group(function(){

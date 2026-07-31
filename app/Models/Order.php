@@ -9,7 +9,8 @@ use App\Traits\HasShopScope;
 
 class Order extends Model
 {
-    use SoftDeletes, HasFactory,HasShopScope;
+    use SoftDeletes, HasFactory, HasShopScope;
+
     protected $fillable = [
         'shop_id', 
         'user_id',
@@ -39,30 +40,60 @@ class Order extends Model
         
         'customer_note',
         'admin_note',
+
+        // Newly Added Cancellation & Delivery Fields
+        'customer_received_at',
+        'cancel_requested_at',
+        'cancel_reason',
+        'cancel_status',
+
+        // Newly Added Delivery Integration Fields
+        'delivery_type',
+        'courier_name',
+        'courier_waybill_id',
     ];
+
     protected $casts = [
-        'subtotal' => 'decimal:2',
-        'shipping_cost' => 'decimal:2',
-        'discount_amount' => 'decimal:2',
-        'total_price' => 'decimal:2',
-        'commission_rate' => 'decimal:2',
+        'subtotal'          => 'decimal:2',
+        'shipping_cost'     => 'decimal:2',
+        'discount_amount'   => 'decimal:2',
+        'total_price'       => 'decimal:2',
+        'commission_rate'   => 'decimal:2',
         'commission_amount' => 'decimal:2',
-        'vendor_earning' => 'decimal:2',
-        'shipping_address' => 'array', // Automatically decodes JSON to array
-        'billing_address' => 'array',  // Automatically decodes JSON to array
-        'delivered_at' => 'datetime',  // Converts string to Carbon date instance
-        'cancelled_at' => 'datetime',
+        'vendor_earning'    => 'decimal:2',
+        'shipping_address'  => 'array', // Automatically decodes JSON to array
+        'billing_address'   => 'array', // Automatically decodes JSON to array
+        'delivered_at'      => 'datetime', // Converts string to Carbon date instance
+        'cancelled_at'      => 'datetime',
+
+        // New DateTime Casts
+        'customer_received_at' => 'datetime',
+        'cancel_requested_at'  => 'datetime',
     ];
+
+    /* -------------------------------------------------------------------------- */
+    /*                                Relationships                               */
+    /* -------------------------------------------------------------------------- */
+
     public function shop()
     {
         return $this->belongsTo(Shop::class);
     }
-    public function user(){
+
+    public function user()
+    {
         return $this->belongsTo(User::class);
     }
-    public function orderItems(){
+
+    public function orderItems()
+    {
         return $this->hasMany(OrderItem::class);
     }
+
+    /* -------------------------------------------------------------------------- */
+    /*                              Model Events & Boot                           */
+    /* -------------------------------------------------------------------------- */
+
     protected static function booted()
     {
         static::creating(function ($order) {
@@ -81,5 +112,22 @@ class Order extends Model
 
         return $number;
     }
-    //
+
+    /* -------------------------------------------------------------------------- */
+    /*                             Business Logic Helpers                         */
+    /* -------------------------------------------------------------------------- */
+
+    /**
+     * Helper to verify if vendor earnings can be released to shop balance.
+     */
+    public function canReleaseVendorFunds(): bool
+    {
+        // Prepaid (eSewa, etc.): Requires customer explicit receipt
+        if ($this->payment_method !== 'cod') {
+            return $this->payment_status === 'paid' && !is_null($this->customer_received_at);
+        }
+
+        // COD: Delivered status updated by Shop/Courier
+        return $this->status === 'delivered';
+    }
 }
