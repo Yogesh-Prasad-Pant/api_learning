@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\CategoryRequestController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Admin\PayoutRequestController;
 
 use App\Http\Controllers\Customer\CustomerAddressController;
 use App\Http\Controllers\Customer\CustomerAuthController;
@@ -103,6 +104,9 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                         Route::delete('/profile', [ShopController::class, 'destroy']);
                         Route::delete('/profile/force',[ShopController::class, 'forceDelete']);
 
+                        Route::get('/payout-requests', [PayoutRequestController::class, 'index']);
+                        Route::post('/payout-requests', [PayoutRequestController::class, 'store']);
+
                         Route::prefix('category-requests')->group(function (){
                             Route::get('/my-requests', [CategoryRequestController::class, 'myShopRequest'])->name('shop.category-requests.my-requests');
                             Route::post('/',[CategoryRequestController::class, 'store'])->name('shop.category-requests.store');
@@ -146,6 +150,9 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                 Route::delete('/delete/{id}',[AdminManagementController::class, 'deleteAdmin'])->name('admin.delete');
                 Route::delete('/force-delete/{id}',[AdminManagementController::class, 'forceDeleteAdmin']);
                 Route::post('/restore/{id}',[AdminManagementController::class, 'restoreAdmin']);
+
+                Route::patch('/payout-requests/{id}/status', [PayoutRequestController::class, 'updateStatus']);
+
                 Route::prefix('category-requests')->group(function (){
                     Route::get('/',[CategoryRequestController::class, 'index'])->name('admin.category-requests.index');
                     Route::post('/approve/{id}', [CategoryRequestController::class, 'approve'])->name('admin.category-requests.approve');

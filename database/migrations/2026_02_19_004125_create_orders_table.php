@@ -66,6 +66,17 @@ return new class extends Migration
             // Notes & Logs
             $table->text('customer_note')->nullable();
             $table->text('admin_note')->nullable();
+
+            // Additional fields to be added:
+            $table->timestamp('customer_received_at')->nullable(); // When customer clicks "Received"
+            $table->timestamp('cancel_requested_at')->nullable();  // When customer requests cancellation
+            $table->string('cancel_reason')->nullable();           // Reason for cancellation
+            $table->enum('cancel_status', ['none', 'pending', 'approved', 'rejected'])->default('none');
+
+            // Future delivery partner readiness:
+            $table->enum('delivery_type', ['shop_self', 'platform_courier', 'third_party'])->default('shop_self');
+            $table->string('courier_name')->nullable();       // e.g., "Nepal Can Move"
+            $table->string('courier_waybill_id')->nullable(); // Tracking ID
             
             $table->softDeletes();
             $table->timestamps();
