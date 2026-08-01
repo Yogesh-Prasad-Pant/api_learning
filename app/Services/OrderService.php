@@ -150,4 +150,36 @@ class OrderService
             return $createdOrders;
         });
     }
+    public function cancelOrder(Order $order, string $reason): Order
+    {
+        return DB::transaction(function () use ($order, $reason) {
+            $order->update([
+                'status'              => 'cancelled',
+                'cancel_status'       => 'approved',
+                'cancel_reason'       => $reason,
+                'cancel_requested_at' => now(),
+                'cancelled_at'        => now(),
+            ]);
+
+            // Restore stock specifically on the vendor's ShopProduct record
+            foreach ($order->orderItems as $item) {
+                if ($item->product_id) {
+                    $shopProduct = ShopProduct::where('shop_id', $order->shop_id)
+                        ->where('product_id', $item->product_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($shopProduct) {
+                        $newStock = $shopProduct->stock + $item->quantity;
+                        $shopProduct->update([
+                            'stock'        => $newStock,
+                            'is_available' => true,
+                        ]);
+                    }
+                }
+            }
+
+            return $order->fresh();
+        });
+    }
 }

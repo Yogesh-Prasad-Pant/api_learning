@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
-use App\Models\Product;
+use App\Models\ShopProduct;
 use App\Services\OrderService;
 use App\Services\OrderSettlementService;
 use Illuminate\Http\JsonResponse;
@@ -62,7 +62,9 @@ class OrderController extends Controller
     /**
      * Customer requests cancellation of an order.
      */
-    public function requestCancel(Request $request, int $id): JsonResponse
+    // app/Http/Controllers/Customer/OrderController.php
+
+    public function requestCancel(Request $request, int $id, OrderService $orderService): JsonResponse
     {
         $request->validate([
             'cancel_reason' => ['required', 'string', 'max:500'],
@@ -73,7 +75,7 @@ class OrderController extends Controller
             ->where('id', $id)
             ->firstOrFail();
 
-        // 1. Prevent cancelling already delivered or cancelled orders
+        // 1. Check if order can be cancelled
         if (in_array($order->status, ['delivered', 'cancelled', 'returned'])) {
             return response()->json([
                 'success' => false,
@@ -81,7 +83,6 @@ class OrderController extends Controller
             ], 422);
         }
 
-        // 2. Prevent duplicate cancellation requests
         if ($order->cancel_status === 'pending') {
             return response()->json([
                 'success' => false,
@@ -89,36 +90,21 @@ class OrderController extends Controller
             ], 422);
         }
 
-        // 3. Immediate Cancellation for unpaid COD orders before shipping
+        // 2. Immediate Cancellation for unpaid COD orders before shipping
         if ($order->payment_method === 'cod' && in_array($order->status, ['pending', 'processing'])) {
-            DB::transaction(function () use ($order, $request) {
-                $order->update([
-                    'status'              => 'cancelled',
-                    'cancel_status'        => 'approved',
-                    'cancel_reason'        => $request->cancel_reason,
-                    'cancel_requested_at' => now(),
-                    'cancelled_at'        => now(),
-                ]);
-
-                // Restore product quantities back to stock
-                foreach ($order->orderItems as $item) {
-                    if ($item->product_id) {
-                        Product::where('id', $item->product_id)->increment('stock', $item->quantity);
-                    }
-                }
-            });
+            $cancelledOrder = $orderService->cancelOrder($order, $request->cancel_reason);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Order cancelled successfully and stock restored.',
-                'data'    => $order->fresh(),
+                'data'    => $cancelledOrder,
             ]);
         }
 
-        // 4. Prepaid or already Shipped COD orders require Shop Approval
+        // 3. Prepaid or already Shipped COD orders require Shop Approval
         $order->update([
-            'cancel_status'        => 'pending',
-            'cancel_reason'        => $request->cancel_reason,
+            'cancel_status'       => 'pending',
+            'cancel_reason'       => $request->cancel_reason,
             'cancel_requested_at' => now(),
         ]);
 
