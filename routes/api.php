@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\AdminManagementController;
-use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ShopController;
 use App\Http\Controllers\Admin\CategoryRequestController;
@@ -20,6 +20,9 @@ use App\Http\Controllers\Customer\CustomerController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\Customer\CheckoutController;
+use App\Http\Controllers\Customer\MarketplaceController;
+use App\Http\Controllers\Customer\StorefrontController;
+use App\Http\Controllers\Customer\DashboardController as CustomerDashboardController;
 
 use App\Http\Controllers\Payment\EsewaPaymentController;
 
@@ -31,12 +34,20 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
             Route::post('/forgot-password', [CustomerAuthController::class, 'forgotPassword']);
         });
         Route::post('/reset-password', [CustomerAuthController::class, 'resetPassword']);
+        Route::get('/shops/{slug}', [StorefrontController::class, 'show']);
+        Route::get('/marketplace/products', [MarketplaceController::class, 'index']);
 
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('/logout', [CustomerAuthController::class, 'logout']);
             Route::get('/profile', [CustomerController::class, 'profile']);
             Route::post('/profile', [CustomerController::class, 'updateProfile']);
             Route::post('/deactivate', [CustomerController::class, 'deactivateAccount']);
+            
+            Route::prefix('/dashboard')->group(function () {
+                Route::get('/', [CustomerDashboardController::class, 'index']);
+                Route::get('/orders-history', [CustomerDashboardController::class, 'orderHistory']);
+                Route::get('/orders-details/{orderNumber}', [CustomerDashboardController::class, 'orderDetails']);
+            });
            
             Route::prefix('addresses')->group(function () {
                 Route::get('/', [CustomerAddressController::class, 'index']);
@@ -99,10 +110,10 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                 Route::post('/shops', [ShopController::class, 'store']);
                 Route::middleware(['assign_shop'])->group(function (){
                     Route::prefix('dashboard')->group(function(){
-                        Route::get('/stats', [DashboardController::class, 'getStats']);
-                        Route::get('/chart', [DashboardController::class, 'getChartData']);
-                        Route::get('/orders', [DashboardController::class, 'getRecentOrders']);
-                        Route::get('/toggle-status',[DashboardController::class, 'toggleShopStatus']);
+                        Route::get('/stats', [AdminDashboardController::class, 'getStats']);
+                        Route::get('/chart', [AdminDashboardController::class, 'getChartData']);
+                        Route::get('/orders', [AdminDashboardController::class, 'getRecentOrders']);
+                        Route::get('/toggle-status',[AdminDashboardController::class, 'toggleShopStatus']);
                     });
                     Route::prefix('shop')->group(function () {   
                         Route::get('/all', [ShopController::class, 'index']);
@@ -148,13 +159,13 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                     });
                 });
                 Route::prefix('dashboard')->group(function(){
-                    Route::get('/index', [DashboardController::class, 'index']);
+                    Route::get('/index', [AdminDashboardController::class, 'index']);
                 });
             });
         // Routes that only super_admin can access
             Route::middleware(['auth:admin','super_admin'])->group(function()
             {
-                Route::get('/super/dashboard', [DashboardController::class, 'superIndex']);
+                Route::get('/super/dashboard', [AdminDashboardController::class, 'superIndex']);
                 Route::get('/list',[AdminManagementController::class, 'index'])->name('admin.index');
                 Route::get('/kyc/view/{id}/{type}', [AdminManagementController::class, 'viewDocument'])->name('admin.kyc.view');
                 Route::post('/kyc/change-status/{id}', [AdminManagementController::class, 'changeKycStatus'])->name('admin.kyc.status');

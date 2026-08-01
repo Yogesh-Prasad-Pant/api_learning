@@ -58,12 +58,6 @@ class OrderController extends Controller
             'data'    => $order,
         ]);
     }
-
-    /**
-     * Customer requests cancellation of an order.
-     */
-    // app/Http/Controllers/Customer/OrderController.php
-
     public function requestCancel(Request $request, int $id, OrderService $orderService): JsonResponse
     {
         $request->validate([

@@ -86,7 +86,7 @@ class Shop extends Model
     }
     public function payoutRequests()
     {
-        return $this->hasMany(PayoutRequests::class);
+        return $this->hasMany(PayoutRequest::class);
     }
     public function shopProducts()
     {
