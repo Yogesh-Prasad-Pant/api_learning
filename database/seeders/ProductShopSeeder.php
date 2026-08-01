@@ -4,9 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\Product;
 use App\Models\Shop;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class ProductShopSeeder extends Seeder
 {
@@ -15,7 +15,6 @@ class ProductShopSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Fetch our related data
         $shop1 = Shop::where('slug', 'johns-tech-world')->first();
         $shop2 = Shop::where('slug', 'johns-fresh-mart')->first();
         $shop3 = Shop::where('slug', 'sarahs-boutique')->first();
@@ -26,76 +25,88 @@ class ProductShopSeeder extends Seeder
         $tshirt  = Product::where('slug', 'generic-cotton-tshirt')->first();
         $service = Product::where('slug', 'web-dev-consultation')->first();
 
-        // SCENARIO 1: Standard Active Product (John's Tech)
+        // Helper function to maintain unique compound keys (product_id + shop_id)
+        $upsertInventory = function ($productId, $shopId, array $data) {
+            $exists = DB::table('shop_products')
+                ->where('product_id', $productId)
+                ->where('shop_id', $shopId)
+                ->exists();
+
+            if ($exists) {
+                DB::table('shop_products')
+                    ->where('product_id', $productId)
+                    ->where('shop_id', $shopId)
+                    ->update(array_merge($data, ['updated_at' => now()]));
+            } else {
+                DB::table('shop_products')->insert(array_merge($data, [
+                    'product_id' => $productId,
+                    'shop_id'    => $shopId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+            }
+        };
+
+        // Scenario 1: Standard Active Product
         if ($laptop && $shop1) {
-            DB::table('product_shop')->insert([
-                'product_id'   => $laptop->id,
-                'shop_id'      => $shop1->id,
-                'price'        => 1500.00,
+            $upsertInventory($laptop->id, $shop1->id, [
+                'price'        => 185000.00,
                 'sale_price'   => null,
-                'stock'        => 10,
+                'stock'        => 8,
                 'min_order'    => 1,
-                'max_order'    => 2, // Limit high-value items
+                'max_order'    => 2,
                 'is_available' => true,
-                'created_at'   => now(),
             ]);
         }
 
-        // SCENARIO 2: Flash Sale Item (Sarah's Boutique)
-        // Testing sale_start and sale_end logic
+        // Scenario 2: Active Flash Sale
         if ($shoes && $shop3) {
-            DB::table('product_shop')->insert([
-                'product_id'   => $shoes->id,
-                'shop_id'      => $shop3->id,
-                'price'        => 180.00,
-                'sale_price'   => 120.00,
-                'stock'        => 50,
+            $upsertInventory($shoes->id, $shop3->id, [
+                'price'        => 22000.00,
+                'sale_price'   => 17500.00,
+                'stock'        => 25,
                 'min_order'    => 1,
-                'sale_start'   => Carbon::now()->subDays(1),
-                'sale_end'     => Carbon::now()->addDays(7),
-                'local_image'  => 'shops/boutique/shoes_promo.jpg',
+                'max_order'    => 5,
+                'sale_start'   => Carbon::now()->subDays(2),
+                'sale_end'     => Carbon::now()->addDays(5),
+                'local_image'  => 'shops/boutique/jordan_promo.jpg',
                 'is_available' => true,
-                'created_at'   => now(),
             ]);
         }
 
-        // SCENARIO 3: Out of Stock / Unavailable (John's Fresh Mart)
-        if ($macbook && $shop2) {
-            DB::table('product_shop')->insert([
-                'product_id'   => $macbook->id,
-                'shop_id'      => $shop2->id,
-                'price'        => 2500.00,
-                'stock'        => 0, // Testing 0 stock
-                'is_available' => false, // Manually disabled
-                'last_stock_update' => Carbon::now()->subHours(5),
-                'created_at'   => now(),
+        // Scenario 3: Out of Stock
+        if ($macbook && $shop1) {
+            $upsertInventory($macbook->id, $shop1->id, [
+                'price'             => 420000.00,
+                'sale_price'        => null,
+                'stock'             => 0,
+                'min_order'         => 1,
+                'max_order'         => 1,
+                'is_available'      => false,
+                'last_stock_update' => Carbon::now()->subHours(12),
             ]);
         }
 
-        // SCENARIO 4: Wholesale Logic (John's Tech)
-        // High min_order requirement
-        if ($tshirt && $shop1) {
-            DB::table('product_shop')->insert([
-                'product_id'   => $tshirt->id,
-                'shop_id'      => $shop1->id,
-                'price'        => 25.00,
-                'stock'        => 500,
-                'min_order'    => 10, // Must buy at least 10
-                'max_order'    => 100,
+        // Scenario 4: Wholesale / Bulk Purchasing
+        if ($tshirt && $shop3) {
+            $upsertInventory($tshirt->id, $shop3->id, [
+                'price'        => 1500.00,
+                'sale_price'   => 1200.00,
+                'stock'        => 250,
+                'min_order'    => 5,
+                'max_order'    => 50,
                 'is_available' => true,
-                'created_at'   => now(),
             ]);
         }
 
-        // SCENARIO 5: Digital Service (Sarah's Boutique)
+        // Scenario 5: Service Slot Availability
         if ($service && $shop3) {
-            DB::table('product_shop')->insert([
-                'product_id'   => $service->id,
-                'shop_id'      => $shop3->id,
-                'price'        => 100.00,
-                'stock'        => 9999, // Infinite service
+            $upsertInventory($service->id, $shop3->id, [
+                'price'        => 5000.00,
+                'stock'        => 999,
+                'min_order'    => 1,
+                'max_order'    => 10,
                 'is_available' => true,
-                'created_at'   => now(),
             ]);
         }
     }

@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Category;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class CategorySeeder extends Seeder
@@ -14,133 +13,138 @@ class CategorySeeder extends Seeder
     public function run(): void
     {
         // ============================================================
-        // HIERARCHY 1: 3 LEVELS DEEP (Electronics -> Computers -> Gaming)
+        // HIERARCHY 1: Electronics (3 Levels)
         // ============================================================
-        
-        // LEVEL 1
-        $electronics = Category::create([
-            'name'             => 'Electronics',
-            'slug'             => 'electronics',
-            'image'            => 'categories/electronics.jpg',
-            'banner'           => 'categories/banners/electronics_banner.jpg',
-            'icon'             => 'fa-tv',
-            'is_menu'          => true,
-            'is_active'        => true,
-            'is_featured'      => true,
-            'parent_id'        => null,
-            'depth'            => 0,
-            'order_priority'   => 1,
-            'commission_rate'  => 10.00,
-            'meta_title'       => 'Best Electronics Online',
-            'meta_description' => 'Browse latest electronics and gadgets.',
-            'meta_keywords'    => 'tech, electronics, gadgets',
-            'attributes'       => json_encode(['brand', 'warranty', 'voltage']),
-        ]);
+        $electronics = Category::updateOrCreate(
+            ['slug' => 'electronics'],
+            [
+                'name'             => 'Electronics',
+                'image'            => 'categories/electronics.jpg',
+                'banner'           => 'categories/banners/electronics_banner.jpg',
+                'icon'             => 'fa-laptop',
+                'is_menu'          => true,
+                'is_active'        => true,
+                'is_featured'      => true,
+                'parent_id'        => null,
+                'depth'            => 0,
+                'order_priority'   => 1,
+                'commission_rate'  => 10.00,
+                'meta_title'       => 'Buy Electronics Online | Laptops, Monitors & Tech',
+                'meta_description' => 'Explore tech products from leading global brands with warranty.',
+                'meta_keywords'    => 'tech, electronics, monitors, laptops, gadgets',
+                'attributes'       => json_encode(['Brand', 'Warranty Period', 'Power Consumption']),
+            ]
+        );
 
-        // LEVEL 2
-        $computers = Category::create([
-            'name'             => 'Computers & Laptops',
-            'slug'             => 'computers-laptops',
-            'image'            => 'categories/computers.jpg',
-            'banner'           => null,
-            'icon'             => 'fa-laptop',
-            'is_menu'          => true,
-            'is_active'        => true,
-            'is_featured'      => false,
-            'parent_id'        => $electronics->id,
-            'depth'            => 1,
-            'order_priority'   => 1,
-            'commission_rate'  => 8.00,
-            'meta_title'       => 'Laptops and PC Components',
-            'meta_description' => 'Find the best laptops here.',
-            'meta_keywords'    => 'laptop, pc, computer',
-            'attributes'       => json_encode(['ram', 'storage', 'processor']),
-        ]);
+        $computers = Category::updateOrCreate(
+            ['slug' => 'computers-laptops'],
+            [
+                'name'             => 'Computers & Laptops',
+                'image'            => 'categories/computers.jpg',
+                'banner'           => 'categories/banners/computers_banner.jpg',
+                'icon'             => 'fa-desktop',
+                'is_menu'          => true,
+                'is_active'        => true,
+                'is_featured'      => true,
+                'parent_id'        => $electronics->id,
+                'depth'            => 1,
+                'order_priority'   => 1,
+                'commission_rate'  => 8.00,
+                'meta_title'       => 'Computers & Laptops | Professional Workstations',
+                'meta_description' => 'Find ultrabooks, MacBooks, and business PCs.',
+                'meta_keywords'    => 'laptop, pc, macbook, desktop, workstation',
+                'attributes'       => json_encode(['RAM', 'Storage', 'Processor', 'Display Size']),
+            ]
+        );
 
-        // LEVEL 3
-        Category::create([
-            'name'             => 'Gaming Laptops',
-            'slug'             => 'gaming-laptops',
-            'image'            => 'categories/gaming_laptops.jpg',
-            'banner'           => null,
-            'icon'             => 'fa-gamepad',
-            'is_menu'          => false,
-            'is_active'        => true,
-            'is_featured'      => true,
-            'parent_id'        => $computers->id,
-            'depth'            => 2,
-            'order_priority'   => 1,
-            'commission_rate'  => 12.00,
-            'meta_title'       => 'High-End Gaming Laptops',
-            'meta_description' => 'NVIDIA Powered Gaming Laptops.',
-            'meta_keywords'    => 'gaming, rtx, laptop',
-            'attributes'       => json_encode(['gpu', 'refresh_rate']),
-        ]);
-
-        // ============================================================
-        // HIERARCHY 2: 2 LEVELS DEEP (Fashion -> Men's Shoes)
-        // ============================================================
-        
-        $fashion = Category::create([
-            'name'             => 'Fashion',
-            'slug'             => 'fashion',
-            'image'            => 'categories/fashion.jpg',
-            'banner'           => 'categories/banners/fashion_banner.jpg',
-            'icon'             => 'fa-tshirt',
-            'is_menu'          => true,
-            'is_active'        => true,
-            'is_featured'      => true,
-            'parent_id'        => null,
-            'depth'            => 0,
-            'order_priority'   => 2,
-            'commission_rate'  => 15.00,
-            'meta_title'       => 'Latest Fashion Trends',
-            'meta_description' => 'Shop the best clothing online.',
-            'meta_keywords'    => 'clothes, fashion, style',
-            'attributes'       => json_encode(['size', 'color', 'material']),
-        ]);
-
-        Category::create([
-            'name'             => 'Mens Shoes',
-            'slug'             => 'mens-shoes',
-            'image'            => 'categories/shoes.jpg',
-            'banner'           => null,
-            'icon'             => 'fa-shoe-prints',
-            'is_menu'          => true,
-            'is_active'        => true,
-            'is_featured'      => false,
-            'parent_id'        => $fashion->id,
-            'depth'            => 1,
-            'order_priority'   => 1,
-            'commission_rate'  => 12.00,
-            'meta_title'       => 'Branded Shoes for Men',
-            'meta_description' => 'Casual and Formal Shoes.',
-            'meta_keywords'    => 'shoes, sneakers, boots',
-            'attributes'       => json_encode(['shoe_size', 'brand']),
-        ]);
+        Category::updateOrCreate(
+            ['slug' => 'gaming-laptops'],
+            [
+                'name'             => 'Gaming Laptops',
+                'image'            => 'categories/gaming_laptops.jpg',
+                'banner'           => 'categories/banners/gaming_laptops_banner.jpg',
+                'icon'             => 'fa-gamepad',
+                'is_menu'          => false,
+                'is_active'        => true,
+                'is_featured'      => true,
+                'parent_id'        => $computers->id,
+                'depth'            => 2,
+                'order_priority'   => 1,
+                'commission_rate'  => 12.00,
+                'meta_title'       => 'High-End Gaming Laptops | RTX Graphics PCs',
+                'meta_description' => 'Powerful gaming laptops featuring high refresh rate displays.',
+                'meta_keywords'    => 'gaming, rtx, rog, alienware, gaming-laptop',
+                'attributes'       => json_encode(['GPU', 'Screen Refresh Rate', 'Cooling Tech']),
+            ]
+        );
 
         // ============================================================
-        // HIERARCHY 3: LEVEL 0 ONLY (Stand-alone)
+        // HIERARCHY 2: Fashion (2 Levels)
         // ============================================================
-        
-        Category::create([
-            'name'             => 'Digital Services',
-            'slug'             => 'digital-services',
-            'image'            => null,
-            'banner'           => null,
-            'icon'             => 'fa-concierge-bell',
-            'is_menu'          => true,
-            'is_active'        => true,
-            'is_featured'      => false,
-            'parent_id'        => null,
-            'depth'            => 0,
-            'order_priority'   => 3,
-            'commission_rate'  => 20.00,
-            'meta_title'       => 'Professional Digital Services',
-            'meta_description' => 'Web development and design.',
-            'meta_keywords'    => 'seo, web, design',
-            'attributes'       => null,
-        ]);
-        //
+        $fashion = Category::updateOrCreate(
+            ['slug' => 'fashion'],
+            [
+                'name'             => 'Fashion',
+                'image'            => 'categories/fashion.jpg',
+                'banner'           => 'categories/banners/fashion_banner.jpg',
+                'icon'             => 'fa-shirt',
+                'is_menu'          => true,
+                'is_active'        => true,
+                'is_featured'      => true,
+                'parent_id'        => null,
+                'depth'            => 0,
+                'order_priority'   => 2,
+                'commission_rate'  => 15.00,
+                'meta_title'       => 'Fashion & Lifestyle Products',
+                'meta_description' => 'Trending shoes, clothing, and stylish accessories.',
+                'meta_keywords'    => 'clothing, footwear, shoes, fashion, apparel',
+                'attributes'       => json_encode(['Size', 'Color', 'Material', 'Gender']),
+            ]
+        );
+
+        Category::updateOrCreate(
+            ['slug' => 'mens-shoes'],
+            [
+                'name'             => "Men's Shoes",
+                'image'            => 'categories/mens_shoes.jpg',
+                'banner'           => 'categories/banners/mens_shoes_banner.jpg',
+                'icon'             => 'fa-shoe-prints',
+                'is_menu'          => true,
+                'is_active'        => true,
+                'is_featured'      => true,
+                'parent_id'        => $fashion->id,
+                'depth'            => 1,
+                'order_priority'   => 1,
+                'commission_rate'  => 12.00,
+                'meta_title'       => "Men's Sneakers, Boots & Formal Shoes",
+                'meta_description' => 'Step up your style with athletic sneakers and formal shoes.',
+                'meta_keywords'    => 'shoes, sneakers, jordan, boots, footwear',
+                'attributes'       => json_encode(['Shoe Size', 'Outer Material', 'Sole Material']),
+            ]
+        );
+
+        // ============================================================
+        // HIERARCHY 3: Digital Services (Standalone)
+        // ============================================================
+        Category::updateOrCreate(
+            ['slug' => 'digital-services'],
+            [
+                'name'             => 'Digital Services',
+                'image'            => 'categories/services.jpg',
+                'banner'           => null,
+                'icon'             => 'fa-globe',
+                'is_menu'          => true,
+                'is_active'        => true,
+                'is_featured'      => false,
+                'parent_id'        => null,
+                'depth'            => 0,
+                'order_priority'   => 3,
+                'commission_rate'  => 20.00,
+                'meta_title'       => 'Professional Digital & IT Services',
+                'meta_description' => 'Web development, consultations, and digital strategy.',
+                'meta_keywords'    => 'seo, web design, consultation, development',
+                'attributes'       => json_encode(['Delivery Time', 'Revision Limit', 'Service Type']),
+            ]
+        );
     }
 }
