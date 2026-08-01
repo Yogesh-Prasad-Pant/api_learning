@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
 use App\Models\Order;
+use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -51,11 +52,13 @@ class OrderController extends Controller
             'courier_waybill_id' => 'nullable|string|max:255',
         ]);
 
-        $order = Order::forShop()->findOrFail($id);
+        $order = Order::forShop()->with('orderItems')->findOrFail($id);
 
         $this->authorize('update', $order);
 
         DB::transaction(function () use ($order, $validated) {
+            $oldStatus = $order->status;
+
             if (isset($validated['status'])) {
                 if ($validated['status'] === 'delivered' && !$order->delivered_at) {
                     $validated['delivered_at'] = now();
@@ -66,14 +69,23 @@ class OrderController extends Controller
                     }
                 } elseif ($validated['status'] === 'cancelled' && !$order->cancelled_at) {
                     $validated['cancelled_at'] = now();
+
+                    // Restock inventory if order wasn't previously cancelled
+                    if ($oldStatus !== 'cancelled') {
+                        $this->restockOrderItems($order);
+                    }
                 }
             }
 
             $order->update($validated);
 
             // Trigger vendor wallet credit if funds are ready to be released
-            if ($order->canReleaseVendorFunds() && $order->shop) {
-                // Example: $order->shop->increment('balance', $order->vendor_earning);
+            if (method_exists($order, 'canReleaseVendorFunds') && $order->canReleaseVendorFunds() && $order->shop) {
+                // Credit shop wallet balance if not credited already
+                if (!$order->is_vendor_credited) {
+                    $order->shop->increment('balance', $order->vendor_earning);
+                    $order->update(['is_vendor_credited' => true]);
+                }
             }
         });
 
@@ -88,7 +100,7 @@ class OrderController extends Controller
      */
     public function approveCancellation(Request $request, string|int $id): JsonResponse
     {
-        $order = Order::forShop()->findOrFail($id);
+        $order = Order::forShop()->with('orderItems')->findOrFail($id);
 
         $this->authorize('update', $order);
 
@@ -112,14 +124,16 @@ class OrderController extends Controller
             // Handle Prepaid Refunds (eSewa, Khalti, Stripe)
             if ($order->payment_status === 'paid' && $order->payment_method !== 'cod') {
                 $updateData['payment_status'] = 'refunded';
-                // NOTE: Trigger eSewa/Payment Gateway refund API service here if integrated
             }
+
+            // Restock products back to inventory
+            $this->restockOrderItems($order);
 
             $order->update($updateData);
         });
 
         return response()->json([
-            'message' => 'Order cancellation approved successfully.',
+            'message' => 'Order cancellation approved successfully and stock restored.',
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
         ]);
     }
@@ -152,5 +166,17 @@ class OrderController extends Controller
             'message' => 'Cancellation request rejected. Order will proceed with fulfillment.',
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
         ]);
+    }
+
+    /**
+     * Helper method to restock products upon cancellation.
+     */
+    private function restockOrderItems(Order $order): void
+    {
+        foreach ($order->orderItems as $item) {
+            if ($item->product_id) {
+                Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+            }
+        }
     }
 }

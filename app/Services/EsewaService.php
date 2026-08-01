@@ -32,6 +32,26 @@ class EsewaService
         return base64_encode($rawHmac);
     }
 
+    public function verifyResponseSignature(array $decodedData): bool
+    {
+        if (empty($decodedData['signature']) || empty($decodedData['signed_field_names'])) {
+            return false;
+        }
+
+        $signedFieldNames = explode(',', $decodedData['signed_field_names']);
+        $dataToSignArr = [];
+
+        foreach ($signedFieldNames as $field) {
+            $value = $decodedData[$field] ?? '';
+            $dataToSignArr[] = "{$field}={$value}";
+        }
+
+        $dataToSign = implode(',', $dataToSignArr);
+        $computedSignature = base64_encode(hash_hmac('sha256', $dataToSign, $this->secretKey, true));
+
+        return hash_equals($computedSignature, $decodedData['signature']);
+    }
+
     /**
      * Prepare the payment form payload for eSewa ePay v2 redirection.
      */
@@ -63,11 +83,12 @@ class EsewaService
     public function verifyTransaction(string $productCode, string $totalAmount, string $transactionUuid): bool
     {
         try {
+            $formattedAmount = number_format((float) $totalAmount, 2, '.', '');
             $endpoint = $this->baseUrl . '/api/epay/transaction/status/';
 
             $response = Http::get($endpoint, [
                 'product_code'     => $productCode,
-                'total_amount'     => $totalAmount,
+                'total_amount'     => $formattedAmount,
                 'transaction_uuid' => $transactionUuid,
             ]);
 

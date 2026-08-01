@@ -30,10 +30,14 @@ class EsewaPaymentController extends Controller
             'order_id' => 'required|exists:orders,id',
         ]);
 
-        $order = Order::findOrFail($request->order_id);
+        // Lock to the authenticated customer for security
+        $order = Order::where('user_id', $request->user()->id)
+            ->where('id', $request->order_id)
+            ->firstOrFail();
 
         if (strtoupper($order->payment_status) === 'PAID') {
             return response()->json([
+                'success' => false,
                 'message' => 'This order is already paid.',
             ], 400);
         }
@@ -45,6 +49,7 @@ class EsewaPaymentController extends Controller
         $payload = $this->esewaService->getPaymentPayload($order, $transactionUuid);
 
         return response()->json([
+            'success' => true,
             'message' => 'eSewa payment initiated successfully.',
             'payload' => $payload,
         ]);
@@ -59,13 +64,13 @@ class EsewaPaymentController extends Controller
         $encodedData = $request->query('data');
 
         if (!$encodedData) {
-            return response()->json(['message' => 'Invalid response payload from eSewa.'], 400);
+            return response()->json(['success' => false, 'message' => 'Invalid response payload from eSewa.'], 400);
         }
 
         $decodedData = json_decode(base64_decode($encodedData), true);
 
         if (!$decodedData) {
-            return response()->json(['message' => 'Failed to decode eSewa response.'], 400);
+            return response()->json(['success' => false, 'message' => 'Failed to decode eSewa response.'], 400);
         }
 
         $status          = $decodedData['status'] ?? null;
@@ -75,14 +80,14 @@ class EsewaPaymentController extends Controller
         $refId           = $decodedData['transaction_code'] ?? null;
 
         if ($status !== 'COMPLETE') {
-            return response()->json(['message' => 'Payment was not completed.'], 400);
+            return response()->json(['success' => false, 'message' => 'Payment was not completed.'], 400);
         }
 
         // Verify transaction directly with eSewa API
         $isVerified = $this->esewaService->verifyTransaction($productCode, $totalAmount, $transactionUuid);
 
         if (!$isVerified) {
-            return response()->json(['message' => 'eSewa payment verification failed.'], 422);
+            return response()->json(['success' => false, 'message' => 'eSewa payment verification failed.'], 422);
         }
 
         // Extract internal Order ID from ORD-{id}-{timestamp}
@@ -92,28 +97,43 @@ class EsewaPaymentController extends Controller
         $order = Order::find($orderId);
 
         if (!$order) {
-            return response()->json(['message' => 'Order not found.'], 404);
+            return response()->json(['success' => false, 'message' => 'Order not found.'], 404);
+        }
+
+        // If already paid, avoid duplicate creation (Idempotency)
+        if (strtoupper($order->payment_status) === 'PAID') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment already recorded.',
+                'order_id' => $order->id,
+            ]);
         }
 
         DB::transaction(function () use ($order, $refId, $decodedData) {
-            // Update Order Payment Status
-            $order->update(['payment_status' => 'PAID']);
+            // Update Order Status & Payment Status
+            $order->update([
+                'payment_status' => 'PAID',
+                'status'         => 'processing', // Move order from pending to processing
+            ]);
 
             // Log Payment Record if table exists
             if (Schema::hasTable('payments')) {
-                Payment::create([
-                    'order_id'         => $order->id,
-                    'payment_method'   => 'ESEWA',
-                    'transaction_code' => $refId,
-                    'amount'           => $order->total_amount,
-                    'status'           => 'COMPLETED',
-                    'raw_response'     => json_encode($decodedData),
-                ]);
+                Payment::firstOrCreate(
+                    ['transaction_code' => $refId],
+                    [
+                        'order_id'       => $order->id,
+                        'payment_method' => 'ESEWA',
+                        'amount'         => $order->total_amount,
+                        'status'         => 'COMPLETED',
+                        'raw_response'   => json_encode($decodedData),
+                    ]
+                );
             }
         });
 
         return response()->json([
-            'message' => 'Payment successful! Order status updated to PAID.',
+            'success'  => true,
+            'message'  => 'Payment successful! Order status updated to PAID.',
             'order_id' => $order->id,
         ]);
     }
@@ -127,6 +147,7 @@ class EsewaPaymentController extends Controller
         Log::warning('eSewa Payment Failed or Cancelled by User', $request->all());
 
         return response()->json([
+            'success' => false,
             'message' => 'Payment failed or was cancelled by user.',
         ], 400);
     }
