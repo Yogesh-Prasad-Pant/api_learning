@@ -3,68 +3,53 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
-use App\Models\Cart;
-use App\Models\CartItem;
-use App\Models\ShopProduct;
+use App\Services\CartService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class CartController extends Controller
 {
-    private function getOrCreateCart(Request $request): Cart
+    public function __construct(
+        protected CartService $cartService
+    ) {}
+
+    public function index(Request $request): JsonResponse
     {
-        // 1. Check Sanctum Guard for Bearer Token
-        if (auth('sanctum')->check()) {
-            return Cart::firstOrCreate(['user_id' => auth('sanctum')->id()]);
-        }
-
-        // 2. Fallback to Guest Header (Mandatory for Stateless API Guests)
-        $sessionId = $request->header('X-Session-ID') ?? $request->header('X-Guest-Token');
-
-        if (!$sessionId) {
-            // Optional: If you use traditional session-based SPA, fallback to request session
-            $sessionId = $request->hasSession() ? $request->session()->getId() : null;
-        }
-
-        if (!$sessionId) {
-            abort(400, 'A valid authorization token or X-Session-ID header is required.');
-        }
-
-        return Cart::firstOrCreate(['session_id' => $sessionId]);
-    }
-
-    public function index(Request $request)
-    {
-        $cart = $this->getOrCreateCart($request);
+        $cart = $this->cartService->getOrCreateCart($request);
         $cart->load(['items.shopProduct', 'items.shop']);
+
         $groupedItems = $cart->items->groupBy('shop_id')->map(function ($items, $shopId) {
             $shop = $items->first()->shop;
 
             $shopSubtotal = $items->sum(function ($item) {
-                
-                return $item->quantity * ($item->shopProduct->price ?? 0);
+                // Resolves sale price or regular price safely
+                $unitPrice = $item->shopProduct->sale_price 
+                    ?? $item->shopProduct->price 
+                    ?? 0;
+
+                return $item->quantity * $unitPrice;
             });
 
             return [
-                'shop_id' => $shopId,
+                'shop_id'   => $shopId,
                 'shop_name' => $shop->name ?? 'Unknown Shop',
-                'subtotal' => round($shopSubtotal, 2),
-                'items' => $items,
+                'subtotal'  => round($shopSubtotal, 2),
+                'items'     => $items,
             ];
         })->values();
 
-        $grandTotal = $groupedItems->sum('subtotal');
-
         return response()->json([
-            'status' => 'success',
-            'data' => [
-                'cart_id' => $cart->id,
-                'grand_total' => round($grandTotal, 2),
-                'shops' => $groupedItems,
+            'success' => true,
+            'message' => 'Cart fetched successfully.',
+            'data'    => [
+                'cart_id'     => $cart->id,
+                'grand_total' => round($groupedItems->sum('subtotal'), 2),
+                'shops'       => $groupedItems,
             ]
         ]);
     }
-    public function store(Request $request)
+
+    public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'shop_product_id' => 'required|exists:shop_products,id',
@@ -72,112 +57,102 @@ class CartController extends Controller
             'attributes'      => 'nullable|array',
         ]);
 
-        $shopProduct = ShopProduct::findOrFail($validated['shop_product_id']);
-        $cart        = $this->getOrCreateCart($request);
+        $cart = $this->cartService->getOrCreateCart($request);
 
-        // Prepare attributes as array or null
-        $attributes = $validated['attributes'] ?? null;
-
-        // Find matching item in cart
-        $existingItem = CartItem::where('cart_id', $cart->id)
-            ->where('shop_product_id', $shopProduct->id)
-            ->when($attributes, function ($query) use ($attributes) {
-                return $query->where('attributes', json_encode($attributes));
-            }, function ($query) {
-                return $query->whereNull('attributes');
-            })
-            ->first();
-
-        $currentCartQty = $existingItem ? $existingItem->quantity : 0;
-        $newTotalQty    = $currentCartQty + $validated['quantity'];
-
-        // 🛑 Stock Check
-        if (isset($shopProduct->stock) && $newTotalQty > $shopProduct->stock) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => "Cannot add item. Only {$shopProduct->stock} unit(s) available in stock (you already have {$currentCartQty} in cart).",
-            ], 422);
-        }    
-
-        if ($existingItem) {
-            $existingItem->update(['quantity' => $newTotalQty]);
-            $cartItem = $existingItem;
-        } else {
-            $cartItem = CartItem::create([
-                'cart_id'         => $cart->id,
-                'shop_id'         => $shopProduct->shop_id,
-                'shop_product_id' => $shopProduct->id,
-                'quantity'        => $validated['quantity'],
-                'attributes'      => $attributes,
-            ]);
-        }
+        $cartItem = $this->cartService->addItem(
+            $cart,
+            $validated['shop_product_id'],
+            $validated['quantity'],
+            $validated['attributes'] ?? null
+        );
 
         return response()->json([
-            'status'  => 'success',
+            'success' => true,
             'message' => 'Item added to cart successfully.',
-            'data'    => $cartItem->load('shopProduct'),
+            'data'    => $cartItem,
         ], 201);
     }
-    public function update(Request $request, $id)
+
+    public function count(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'quantity' => 'required|integer|min:0',
-        ]);
-
-        $cart = $this->getOrCreateCart($request);
-        $cartItem = CartItem::where('cart_id', $cart->id)->where('id', $id)->firstOrFail();
-
-        if ($validated['quantity'] === 0) {
-            $cartItem->delete();
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Item removed from cart.',
-            ]);
-        }
-        $shopProduct = $cartItem->shopProduct;
-        if (isset($shopProduct->stock) && $validated['quantity'] > $shopProduct->stock) {
-            return response()->json([
-                'status' => 'error',
-                'message' => "Cannot update quantity. Only {$shopProduct->stock} unit(s) available in stock.",
-            ], 422);
-        }
-        $cartItem->update(['quantity' => $validated['quantity']]);
+        $cart = $this->cartService->getOrCreateCart($request);
+        $totalItems = $cart->items()->sum('quantity');
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'Cart item quantity updated.',
-            'data' => $cartItem,
+            'success' => true,
+            'data'    => [
+                'item_count' => (int) $totalItems,
+            ],
         ]);
     }
 
-    public function destroy(Request $request, $id)
+    public function sync(Request $request): JsonResponse
     {
-        $cart = $this->getOrCreateCart($request);
+        $validated = $request->validate([
+            'items'                   => 'required|array|min:1',
+            'items.*.shop_product_id' => 'required|exists:shop_products,id',
+            'items.*.quantity'        => 'required|integer|min:1',
+            'items.*.attributes'      => 'nullable|array',
+        ]);
 
-        $deleted = CartItem::where('cart_id', $cart->id)
-            ->where('id', $id)
-            ->delete();
+        $this->cartService->syncGuestCart(
+            $request->user()->id,
+            $validated['items']
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Guest cart synchronized successfully with user account.',
+        ]);
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'quantity'   => 'required|integer|min:1',
+            'attributes' => 'nullable|array',
+        ]);
+
+        $cart = $this->cartService->getOrCreateCart($request);
+        $cartItem = $this->cartService->updateItem(
+            $cart,
+            $id,
+            $validated['quantity'],
+            $validated['attributes'] ?? null
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cart item updated successfully.',
+            'data'    => $cartItem,
+        ]);
+    }
+
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $cart = $this->cartService->getOrCreateCart($request);
+        $deleted = $this->cartService->removeItem($cart, $id);
 
         if (!$deleted) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Cart item not found.',
+                'success' => false,
+                'message' => 'Item not found in cart.',
             ], 404);
         }
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'Item removed from cart.',
+            'success' => true,
+            'message' => 'Item removed from cart successfully.',
         ]);
     }
 
-    public function clear(Request $request)
+    public function clear(Request $request): JsonResponse
     {
-        $cart = $this->getOrCreateCart($request);
-        $cart->items()->delete();
+        $cart = $this->cartService->getOrCreateCart($request);
+        $this->cartService->clearCart($cart);
 
         return response()->json([
-            'status' => 'success',
+            'success' => true,
             'message' => 'Cart cleared successfully.',
         ]);
     }

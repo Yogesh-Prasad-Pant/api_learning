@@ -42,7 +42,7 @@ class AdminManagementController extends Controller
     }
 
     //function to view business  license
-    public function viewBusinessLIcense($id)
+    public function viewBusinessLicense($id)
     {
         $admin = Admin::findOrFail($id);
 
@@ -153,19 +153,24 @@ class AdminManagementController extends Controller
             return response()->json(['message' => 'Unauthorized. You can not delete other account'], 403);
         }
 
-        $admin->shops()->update(['status' => 'inactive']);
-        $hasActiveOrders = $admin->shops()->whereHas('orders', function($q){
-            $q->whereIn('status', ['pending','processing','shipped','shipping']);
-            })->exists();
+        $hasActiveOrders = $admin->shops()->whereHas('orders', function ($q) {
+            $q->whereIn('status', ['pending', 'processing', 'shipped']);
+        })->exists();
 
         if ($hasActiveOrders) {
+            // Take shops offline to prevent new orders
+            $admin->shops()->update(['status' => 'inactive']);
+
             return response()->json([
-                'status' => 'warning',
-                'message' => 'Your shop has been taken offline to prevent new orders. However, you still have pending orders to fulfill. You can only delete your account permanently once all orders are "Delivered" or "Cancelled".'
+                'status'  => 'warning',
+                'message' => 'Your shop has been taken offline to prevent new orders. However, you still have pending orders to fulfill. You can only delete your account permanently once all active orders are complete or cancelled.'
             ], 400);
         }
-        
+
+        // Put shops offline and soft-delete admin
+        $admin->shops()->update(['status' => 'inactive']);
         $admin->delete();
+
         if((int)$currentUser->id === (int)$targetId){
             $currentUser->tokens()->delete();
             return response()->json([
@@ -180,16 +185,23 @@ class AdminManagementController extends Controller
 
     //Delete admin permanently 
     public function forceDeleteAdmin($id){
+
         $admin = Admin::withTrashed()->find($id);
-        if(!$admin) return response()->json(['message' => 'Admin not found'], 404);
+
+        if(!$admin){
+            return response()->json(['message' => 'Admin not found'], 404);
+        } 
+
         if(auth('admin')->user()->role !== 'super_admin') {
             return response()->json(['message' => 'Only Super Admin can Permanently delete accounts'], 403);
         }
-        
+        if ($admin->image && Storage::disk('public')->exists($admin->image)) {
+            Storage::disk('public')->delete($admin->image);
+        } 
        $filesToDelete = [$admin->image, $admin->id_proof_path];
         foreach ($filesToDelete as $file) {
-            if ($file && Storage::disk('public')->exists($file)) {
-                Storage::disk('public')->delete($file);
+            if ($file && Storage::disk('private')->exists($file)) {
+                Storage::disk('private')->delete($file);
             }
          }
 

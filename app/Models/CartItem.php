@@ -17,6 +17,7 @@ class CartItem extends Model
     ];
     protected $casts = [
         'attributes' => 'array',
+        'quantity'   => 'integer',
     ];
 
     public function cart(){

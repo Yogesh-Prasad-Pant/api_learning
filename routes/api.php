@@ -59,10 +59,15 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
         });
         Route::prefix('cart')->group(function () {
             Route::get('/', [CartController::class, 'index']);         // Get cart items (grouped by shop)
-            Route::post('/', [CartController::class, 'store']);        // Add item to cart (with stock validation)
+            Route::post('/', [CartController::class, 'store']);
+            Route::get('/count', [CartController::class, 'count']);
+
             Route::put('/{id}', [CartController::class, 'update']);    // Update item quantity by cart_item_id
             Route::delete('/{id}', [CartController::class, 'destroy']); // Remove specific item
-            Route::delete('/', [CartController::class, 'clear']);      // Clear entire cart
+            Route::delete('/clear', [CartController::class, 'clear']);   
+            Route::middleware('auth:sanctum')->group(function () {
+                Route::post('/sync', [CartController::class, 'sync']);
+            });
         });
     });
 
