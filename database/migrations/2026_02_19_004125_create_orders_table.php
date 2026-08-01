@@ -62,16 +62,23 @@ return new class extends Migration
             $table->string('tracking_number')->nullable();
             $table->timestamp('delivered_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();
+            $table->timestamp('returned_at')->nullable();
+            $table->timestamp('customer_received_at')->nullable();
             
             // Notes & Logs
             $table->text('customer_note')->nullable();
             $table->text('admin_note')->nullable();
 
-            // Additional fields to be added:
-            $table->timestamp('customer_received_at')->nullable(); // When customer clicks "Received"
+         
+             // When customer clicks "Received"
             $table->timestamp('cancel_requested_at')->nullable();  // When customer requests cancellation
             $table->string('cancel_reason')->nullable();           // Reason for cancellation
             $table->enum('cancel_status', ['none', 'pending', 'approved', 'rejected'])->default('none');
+
+            // Return & Refund Workflow
+            $table->timestamp('return_requested_at')->nullable();
+            $table->string('return_reason')->nullable();
+            $table->enum('return_status', ['none', 'pending', 'approved', 'rejected'])->default('none');
 
             // Future delivery partner readiness:
             $table->enum('delivery_type', ['shop_self', 'platform_courier', 'third_party'])->default('shop_self');

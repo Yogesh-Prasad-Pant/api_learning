@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\OrderSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -35,35 +36,30 @@ class OrderController extends Controller
 
         return new OrderResource($order);
     }
-
-    /**
-     * Update order status, payment status, tracking, or delivery details.
-     */
-    public function updateStatus(Request $request, string|int $id): JsonResponse
+    public function updateStatus(Request $request, string|int $id, OrderSettlementService $settlementService): JsonResponse
     {
         $validated = $request->validate([
             'status'             => 'nullable|string|in:pending,processing,shipped,delivered,cancelled,returned',
             'payment_status'     => 'nullable|string|in:unpaid,paid,partially_refunded,refunded',
             'tracking_number'    => 'nullable|string|max:255',
             'admin_note'         => 'nullable|string|max:500',
-            // Delivery / Logistics Partner Readiness
             'delivery_type'      => 'nullable|string|in:shop_self,platform_courier,third_party',
             'courier_name'       => 'nullable|string|max:255',
             'courier_waybill_id' => 'nullable|string|max:255',
         ]);
 
-        $order = Order::forShop()->with('orderItems')->findOrFail($id);
+        $order = Order::forShop()->with(['orderItems', 'shop'])->findOrFail($id);
 
         $this->authorize('update', $order);
 
-        DB::transaction(function () use ($order, $validated) {
+        DB::transaction(function () use ($order, $validated, $settlementService) {
             $oldStatus = $order->status;
 
             if (isset($validated['status'])) {
                 if ($validated['status'] === 'delivered' && !$order->delivered_at) {
                     $validated['delivered_at'] = now();
 
-                    // If COD order is delivered by shop/courier, auto-mark payment as paid
+                    // Auto-mark COD orders as paid upon delivery
                     if ($order->payment_method === 'cod') {
                         $validated['payment_status'] = 'paid';
                     }
@@ -78,14 +74,15 @@ class OrderController extends Controller
             }
 
             $order->update($validated);
+            $freshOrder = $order->fresh();
 
-            // Trigger vendor wallet credit if funds are ready to be released
-            if (method_exists($order, 'canReleaseVendorFunds') && $order->canReleaseVendorFunds() && $order->shop) {
-                // Credit shop wallet balance if not credited already
-                if (!$order->is_vendor_credited) {
-                    $order->shop->increment('balance', $order->vendor_earning);
-                    $order->update(['is_vendor_credited' => true]);
-                }
+            // Trigger settlement only if the order is delivered & paid, and hasn't been credited yet
+            if (
+                !$freshOrder->is_credited &&
+                $freshOrder->status === 'delivered' &&
+                $freshOrder->payment_status === 'paid'
+            ) {
+                $settlementService->settleOrder($freshOrder);
             }
         });
 
@@ -94,10 +91,6 @@ class OrderController extends Controller
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
         ]);
     }
-
-    /**
-     * Approve a customer's cancellation request.
-     */
     public function approveCancellation(Request $request, string|int $id): JsonResponse
     {
         $order = Order::forShop()->with('orderItems')->findOrFail($id);
@@ -137,10 +130,6 @@ class OrderController extends Controller
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
         ]);
     }
-
-    /**
-     * Reject a customer's cancellation request.
-     */
     public function rejectCancellation(Request $request, string|int $id): JsonResponse
     {
         $request->validate([
@@ -167,10 +156,52 @@ class OrderController extends Controller
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
         ]);
     }
+    public function processReturn(Request $request, string|int $id, OrderSettlementService $settlementService): JsonResponse
+    {
+        $validated = $request->validate([
+            'status'     => ['required', 'string', 'in:approved,rejected'],
+            'admin_note' => ['nullable', 'string', 'max:500'],
+        ]);
 
-    /**
-     * Helper method to restock products upon cancellation.
-     */
+        // Scoped to the vendor's shop + authorization
+        $order = Order::forShop()->with('orderItems')->findOrFail($id);
+
+        $this->authorize('update', $order);
+
+        // 1. Verify that a return request is actually pending
+        if ($order->return_status !== 'pending') {
+            return response()->json([
+                'message' => 'This order does not have a pending return request.',
+            ], 422);
+        }
+
+        // 2. Handle Rejection
+        if ($validated['status'] === 'rejected') {
+            $order->update([
+                'return_status' => 'rejected',
+                'admin_note'    => $validated['admin_note'] ?? $order->admin_note,
+            ]);
+
+            return response()->json([
+                'message' => 'Return request has been rejected.',
+                'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
+            ]);
+        }
+
+        // 3. Handle Approval (Triggers financial reversal and restocks items)
+        $order->update([
+            'return_status' => 'approved',
+            'admin_note'    => $validated['admin_note'] ?? $order->admin_note,
+        ]);
+
+        // Reverse shop earnings (if credited) & restore inventory
+        $settlementService->refundOrder($order);
+
+        return response()->json([
+            'message' => 'Return request approved. Order marked as returned, payment status updated to refunded, and stock restored.',
+            'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
+        ]);
+    }
     private function restockOrderItems(Order $order): void
     {
         foreach ($order->orderItems as $item) {

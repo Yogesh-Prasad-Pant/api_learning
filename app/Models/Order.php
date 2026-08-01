@@ -23,6 +23,7 @@ class Order extends Model
         'commission_rate',
         'commission_amount',
         'vendor_earning',
+        'is_credited',
 
         'status',
         'payment_status',
@@ -37,17 +38,23 @@ class Order extends Model
         'tracking_number',
         'delivered_at',
         'cancelled_at',
+        'returned_at',
         
         'customer_note',
         'admin_note',
 
-        // Newly Added Cancellation & Delivery Fields
+        // Cancellation Fields
         'customer_received_at',
         'cancel_requested_at',
         'cancel_reason',
         'cancel_status',
 
-        // Newly Added Delivery Integration Fields
+        // Return & Refund Fields
+        'return_requested_at',
+        'return_reason',
+        'return_status',
+
+        // Delivery Integration Fields
         'delivery_type',
         'courier_name',
         'courier_waybill_id',
@@ -61,18 +68,21 @@ class Order extends Model
         'commission_rate'   => 'decimal:2',
         'commission_amount' => 'decimal:2',
         'vendor_earning'    => 'decimal:2',
-        'shipping_address'  => 'array', // Automatically decodes JSON to array
-        'billing_address'   => 'array', // Automatically decodes JSON to array
-        'delivered_at'      => 'datetime', // Converts string to Carbon date instance
-        'cancelled_at'      => 'datetime',
-
-        // New DateTime Casts
+        'is_credited'       => 'boolean',
+        'shipping_address'  => 'array',
+        'billing_address'   => 'array',
+        
+        // DateTime Casts
+        'delivered_at'         => 'datetime',
+        'cancelled_at'         => 'datetime',
+        'returned_at'          => 'datetime',
         'customer_received_at' => 'datetime',
         'cancel_requested_at'  => 'datetime',
+        'return_requested_at'  => 'datetime',
     ];
 
     /* -------------------------------------------------------------------------- */
-    /*                                Relationships                               */
+    /*                               Relationships                                */
     /* -------------------------------------------------------------------------- */
 
     public function shop()
@@ -91,7 +101,7 @@ class Order extends Model
     }
 
     /* -------------------------------------------------------------------------- */
-    /*                              Model Events & Boot                           */
+    /*                             Model Events & Boot                            */
     /* -------------------------------------------------------------------------- */
 
     protected static function booted()
@@ -105,7 +115,6 @@ class Order extends Model
 
     protected static function generateUniqueOrderNumber(): string
     {
-        // Timestamp + random digits is faster and collision-free
         do {
             $number = 'ORD-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4));
         } while (static::where('order_number', $number)->exists());
@@ -114,7 +123,7 @@ class Order extends Model
     }
 
     /* -------------------------------------------------------------------------- */
-    /*                             Business Logic Helpers                         */
+    /*                           Business Logic Helpers                           */
     /* -------------------------------------------------------------------------- */
 
     /**
@@ -122,12 +131,18 @@ class Order extends Model
      */
     public function canReleaseVendorFunds(): bool
     {
-        // Prepaid (eSewa, etc.): Requires customer explicit receipt
         if ($this->payment_method !== 'cod') {
             return $this->payment_status === 'paid' && !is_null($this->customer_received_at);
         }
 
-        // COD: Delivered status updated by Shop/Courier
         return $this->status === 'delivered';
+    }
+
+    /**
+     * Helper to check if an order is eligible for a return request.
+     */
+    public function canBeReturned(): bool
+    {
+        return $this->status === 'delivered' && $this->return_status === 'none';
     }
 }

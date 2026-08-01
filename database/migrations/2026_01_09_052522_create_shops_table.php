@@ -42,6 +42,8 @@ return new class extends Migration
 
             $table->decimal('commission_rate', 5, 2)->default(0.00); 
             $table->decimal('balance', 15, 2)->default(0.00);
+            $table->decimal('total_earnings', 15, 2)->default(0.00);
+            $table->decimal('total_withdrawn', 15, 2)->default(0.00);
 
             $table->json('social_links')->nullable();
             $table->string('meta_title')->nullable();

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Product;
 use App\Services\OrderService;
+use App\Services\OrderSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,7 +68,8 @@ class OrderController extends Controller
             'cancel_reason' => ['required', 'string', 'max:500'],
         ]);
 
-        $order = Order::where('user_id', $request->user()->id)
+        $order = Order::with('orderItems')
+            ->where('user_id', $request->user()->id)
             ->where('id', $id)
             ->firstOrFail();
 
@@ -88,18 +91,27 @@ class OrderController extends Controller
 
         // 3. Immediate Cancellation for unpaid COD orders before shipping
         if ($order->payment_method === 'cod' && in_array($order->status, ['pending', 'processing'])) {
-            $order->update([
-                'status'              => 'cancelled',
-                'cancel_status'        => 'approved',
-                'cancel_reason'        => $request->cancel_reason,
-                'cancel_requested_at' => now(),
-                'cancelled_at'        => now(),
-            ]);
+            DB::transaction(function () use ($order, $request) {
+                $order->update([
+                    'status'              => 'cancelled',
+                    'cancel_status'        => 'approved',
+                    'cancel_reason'        => $request->cancel_reason,
+                    'cancel_requested_at' => now(),
+                    'cancelled_at'        => now(),
+                ]);
+
+                // Restore product quantities back to stock
+                foreach ($order->orderItems as $item) {
+                    if ($item->product_id) {
+                        Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                    }
+                }
+            });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Order cancelled successfully.',
-                'data'    => $order,
+                'message' => 'Order cancelled successfully and stock restored.',
+                'data'    => $order->fresh(),
             ]);
         }
 
@@ -113,16 +125,17 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cancellation request submitted successfully. Waiting for shop approval.',
-            'data'    => $order,
+            'data'    => $order->fresh(),
         ]);
     }
 
     /**
      * Customer confirms physical receipt of the product.
      */
-    public function confirmReceived(Request $request, int $id): JsonResponse
+    public function confirmReceived(Request $request, int $id, OrderSettlementService $settlementService): JsonResponse
     {
-        $order = Order::where('user_id', $request->user()->id)
+        $order = Order::with('shop')
+            ->where('user_id', $request->user()->id)
             ->where('id', $id)
             ->firstOrFail();
 
@@ -142,26 +155,73 @@ class OrderController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($order) {
+        DB::transaction(function () use ($order, $settlementService) {
             $order->customer_received_at = now();
 
-            // For prepaid orders (eSewa, Khalti, etc.), receipt confirmation completes delivery
-            if ($order->payment_method !== 'cod' && $order->payment_status === 'paid') {
+            // Auto-mark delivery details upon confirmation
+            if ($order->status !== 'delivered') {
                 $order->status = 'delivered';
                 $order->delivered_at = now();
             }
 
+            // Auto-mark COD payments as paid upon customer confirmation
+            if ($order->payment_method === 'cod') {
+                $order->payment_status = 'paid';
+            }
+
             $order->save();
 
-            // NOTE: In the Admin/Shop OrderController or WalletService, 
-            // when $order->canReleaseVendorFunds() evaluates to true,
-            // we credit $order->vendor_earning to $shop->balance.
+            $freshOrder = $order->fresh();
+
+            // Trigger settlement logic when order is marked delivered and paid
+            if (
+                !$freshOrder->is_credited && 
+                $freshOrder->status === 'delivered' && 
+                $freshOrder->payment_status === 'paid'
+            ) {
+                $settlementService->settleOrder($freshOrder);
+            }
         });
 
         return response()->json([
             'success' => true,
             'message' => 'Order marked as received successfully!',
-            'data'    => $order->refresh(),
+            'data'    => $order->fresh(),
+        ]);
+    }
+
+    /**
+     * Customer requests a return for a delivered order.
+     */
+    public function requestReturn(Request $request, $id)
+    {
+        $request->validate([
+            'return_reason' => 'required|string|max:500',
+        ]);
+
+        $order = Order::where('user_id', $request->user()->id)
+            ->where('id', $id)
+            ->firstOrFail();
+
+        // 1. Ensure the order is delivered and hasn't requested a return yet
+        if (!$order->canBeReturned()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This order is not eligible for a return. It must be delivered and have no pending return requests.',
+            ], 422);
+        }
+
+        // 2. Register return request
+        $order->update([
+            'return_status'       => 'pending',
+            'return_reason'       => $request->return_reason,
+            'return_requested_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Return request submitted successfully. Waiting for store approval.',
+            'data'    => $order->fresh(),
         ]);
     }
 }

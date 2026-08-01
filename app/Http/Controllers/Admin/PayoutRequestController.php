@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\PayoutRequest;
+use App\Models\Shop;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,10 @@ class PayoutRequestController extends Controller
         ]);
     }
 
+    /**
+     * Vendor submits a payout request.
+     * Deducts balance immediately into a pending state to avoid double-withdrawal.
+     */
     public function store(Request $request): JsonResponse
     {
         /** @var \App\Models\Shop $activeShop */
@@ -50,35 +55,44 @@ class PayoutRequestController extends Controller
             'payment_details' => ['required', 'array'],
         ]);
 
-        if ($validated['amount'] > $activeShop->balance) {
-            throw ValidationException::withMessages([
-                'amount' => ["Requested amount exceeds your available shop balance of {$activeShop->balance}"],
+        return DB::transaction(function () use ($activeShop, $validated) {
+            // Lock shop row to safely verify balance
+            $shop = Shop::where('id', $activeShop->id)->lockForUpdate()->first();
+
+            if ($validated['amount'] > $shop->balance) {
+                throw ValidationException::withMessages([
+                    'amount' => ["Requested amount exceeds your available shop balance of Rs. {$shop->balance}"],
+                ]);
+            }
+
+            // Prevent duplicate pending requests for the same shop
+            $hasPending = PayoutRequest::forShop()
+                ->where('status', 'pending')
+                ->exists();
+
+            if ($hasPending) {
+                throw ValidationException::withMessages([
+                    'payout' => ['You already have a pending payout request under review.'],
+                ]);
+            }
+
+            // Reserve funds immediately upon request
+            $shop->decrement('balance', $validated['amount']);
+
+            $payout = PayoutRequest::create([
+                'shop_id'         => $shop->id,
+                'amount'          => $validated['amount'],
+                'payment_method'  => $validated['payment_method'],
+                'payment_details' => $validated['payment_details'],
+                'status'          => 'pending',
             ]);
-        }
 
-        // Prevent duplicate pending requests for the same shop
-        $hasPending = PayoutRequest::forShop()
-            ->where('status', 'pending')
-            ->exists();
-
-        if ($hasPending) {
-            throw ValidationException::withMessages([
-                'payout' => ['You already have a pending payout request under review.'],
-            ]);
-        }
-
-        $payout = PayoutRequest::create([
-            'shop_id'         => $activeShop->id,
-            'amount'          => $validated['amount'],
-            'payment_method'  => $validated['payment_method'],
-            'payment_details' => $validated['payment_details'],
-            'status'          => 'pending',
-        ]);
-
-        return response()->json([
-            'message' => 'Payout request submitted successfully.',
-            'payout'  => $payout,
-        ], 201);
+            return response()->json([
+                'message'     => 'Payout request submitted successfully.',
+                'new_balance' => $shop->fresh()->balance,
+                'payout'      => $payout,
+            ], 201);
+        });
     }
 
     /**
@@ -91,40 +105,37 @@ class PayoutRequestController extends Controller
             'admin_note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $payout = PayoutRequest::with('shop')->findOrFail($id);
+        return DB::transaction(function () use ($id, $validated) {
+            $payout = PayoutRequest::with('shop')->lockForUpdate()->findOrFail($id);
 
-        if (in_array($payout->status, ['completed', 'rejected'])) {
-            throw ValidationException::withMessages([
-                'status' => ["This payout request has already been finalized as {$payout->status}."],
-            ]);
-        }
+            if (in_array($payout->status, ['completed', 'rejected'])) {
+                throw ValidationException::withMessages([
+                    'status' => ["This payout request has already been finalized as {$payout->status}."],
+                ]);
+            }
 
-        DB::transaction(function () use ($payout, $validated) {
+            $oldStatus = $payout->status;
             $newStatus = $validated['status'];
 
-            if ($newStatus === 'completed' && $payout->status !== 'completed') {
-                $shop = $payout->shop;
-
-                if ($shop->balance < $payout->amount) {
-                    throw ValidationException::withMessages([
-                        'balance' => ['Shop balance is insufficient to process this payout completion.'],
-                    ]);
-                }
-
-                $shop->decrement('balance', $payout->amount);
-                $payout->processed_at = now();
+            // If rejected, refund reserved balance back to the shop
+            if ($newStatus === 'rejected' && $oldStatus !== 'rejected') {
+                $payout->shop->increment('balance', $payout->amount);
             }
 
             $payout->update([
                 'status'       => $newStatus,
                 'admin_note'   => $validated['admin_note'] ?? $payout->admin_note,
-                'processed_at' => $payout->processed_at ?? ($newStatus === 'completed' ? now() : null),
+                'processed_at' => $newStatus === 'completed' ? ($payout->processed_at ?? now()) : $payout->processed_at,
+            ]);
+            
+            if ($newStatus === 'completed' && $oldStatus !== 'completed') {
+                $payout->shop->increment('total_withdrawn', $payout->amount);
+            }
+
+            return response()->json([
+                'message' => "Payout request updated to {$newStatus} successfully.",
+                'payout'  => $payout->fresh('shop'),
             ]);
         });
-
-        return response()->json([
-            'message' => "Payout request updated to {$validated['status']} successfully.",
-            'payout'  => $payout->fresh('shop'),
-        ]);
     }
 }

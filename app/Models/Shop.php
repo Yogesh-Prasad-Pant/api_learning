@@ -35,6 +35,8 @@ class Shop extends Model
                         'opening_hours' => 'array',
                         'commission_rate' => 'float',
                         'balance' => 'float',
+                        'total_earnings' => 'float',
+                        'total_withdrawn' => 'float',
                         'is_featured' => 'boolean',
                         'is_open' => 'boolean',
                         'rating' => 'float',
