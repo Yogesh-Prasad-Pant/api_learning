@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services;
 
 use App\Models\Cart;
@@ -6,6 +7,9 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Shop;
 use App\Models\ShopProduct;
+use App\Notifications\AdminNewOrderNotification;
+use App\Notifications\OrderPlacedNotification;
+use App\Notifications\OrderStatusUpdatedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,9 +26,9 @@ class OrderService
      */
     public function checkout($user, array $validatedData): array
     {
-        return DB::transaction(function () use ($user, $validatedData) {
-            // 1. Fetch user's cart with items and lock the cart row to prevent concurrent checkouts
-            $cart = Cart::with(['items.shopProduct.product'])
+        // 1. Execute DB Transaction (Creates orders & clears cart)
+        $createdOrders = DB::transaction(function () use ($user, $validatedData) {
+            $cart = Cart::with(['items.shopProduct.product.category'])
                 ->where('user_id', $user->id)
                 ->lockForUpdate()
                 ->first();
@@ -35,9 +39,9 @@ class OrderService
                 ]);
             }
 
-            // 2. Group items by shop_id for multi-vendor splitting
+            // Group items by shop_id for multi-vendor splitting
             $groupedItems = $cart->items->groupBy('shop_id');
-            $createdOrders = [];
+            $orders = [];
 
             foreach ($groupedItems as $shopId => $items) {
                 $shop = Shop::findOrFail($shopId);
@@ -45,9 +49,12 @@ class OrderService
                 $subtotal = 0;
                 $orderItemsData = [];
 
-                // 3. Verify availability & stock with pessimistic locking per shop product
+                // Verify availability & stock with pessimistic locking per shop product
                 foreach ($items as $item) {
+                    /** @var ShopProduct|null $shopProduct */
                     $shopProduct = ShopProduct::where('id', $item->shop_product_id)
+                        ->where('shop_id', $shopId)
+                        ->withShop($shopId)
                         ->lockForUpdate()
                         ->first();
 
@@ -64,9 +71,9 @@ class OrderService
 
                     $orderItemsData[] = [
                         'shop_product' => $shopProduct,
-                        'product_id'   => $shopProduct->product_id,
-                        'product_name' => $item->shopProduct->product->name ?? 'Product',
-                        'product_sku'  => $item->shopProduct->product->sku ?? null,
+                        'product_id'   => $shopProduct->id,
+                        'product_name' => $shopProduct->product->name ?? 'Product',
+                        'product_sku'  => $shopProduct->product->slug ?? ('SKU-' . $shopProduct->id),
                         'quantity'     => $item->quantity,
                         'unit_price'   => $unitPrice,
                         'total_price'  => $itemTotal,
@@ -74,16 +81,17 @@ class OrderService
                     ];
                 }
 
-                // 4. Calculate commission and earnings
+                // Calculate commission via product category hierarchy
+                $firstProduct = $items->first()->shopProduct->product ?? null;
+                $commissionRate = $firstProduct->category->effective_commission ?? 0.00;
+
                 $shippingCost = 0.00;
                 $discountAmount = 0.00;
                 $totalPrice = $subtotal + $shippingCost - $discountAmount;
 
-                $commissionRate = $shop->commission_rate ?? 0.00;
                 $commissionAmount = ($totalPrice * $commissionRate) / 100;
                 $vendorEarning = $totalPrice - $commissionAmount;
 
-                // 5. Create Order record for this specific vendor
                 $shippingAddress = is_array($validatedData['shipping_address'])
                     ? json_encode($validatedData['shipping_address'])
                     : $validatedData['shipping_address'];
@@ -93,6 +101,7 @@ class OrderService
                     ? json_encode($billingAddressRaw)
                     : $billingAddressRaw;
 
+                // Create Order record for this specific vendor
                 $order = Order::create([
                     'shop_id'           => $shopId,
                     'user_id'           => $user->id,
@@ -104,7 +113,7 @@ class OrderService
                     'commission_amount' => $commissionAmount,
                     'vendor_earning'    => $vendorEarning,
                     'status'            => 'pending',
-                    'payment_status'    => 'pending',
+                    'payment_status'    => $validatedData['payment_method'] === 'cod' ? 'pending' : 'unpaid',
                     'payment_method'    => $validatedData['payment_method'],
                     'customer_name'     => $validatedData['customer_name'],
                     'customer_phone'    => $validatedData['customer_phone'],
@@ -113,7 +122,7 @@ class OrderService
                     'customer_note'     => $validatedData['customer_note'] ?? null,
                 ]);
 
-                // 6. Insert OrderItems and deduct inventory stock
+                // Insert OrderItems and deduct inventory stock
                 $itemsToCreate = [];
 
                 foreach ($orderItemsData as $itemData) {
@@ -130,6 +139,7 @@ class OrderService
                         'updated_at'       => now(),
                     ];
 
+                    /** @var ShopProduct $shopProduct */
                     $shopProduct = $itemData['shop_product'];
                     $newStock = $shopProduct->stock - $itemData['quantity'];
 
@@ -141,18 +151,36 @@ class OrderService
 
                 OrderItem::insert($itemsToCreate);
 
-                $createdOrders[] = $order->load('orderItems');
+                // Load shop along with its single owner admin using correct 'owner' relation
+                $orders[] = $order->load(['orderItems', 'shop.owner']);
             }
 
-            // 7. Clear cart items after successful order creation
+            // Clear cart items after successful order creation
             $cart->items()->delete();
 
-            return $createdOrders;
+            return $orders;
         });
+
+        // 2. Dispatch Notifications AFTER DB transaction commits safely
+        foreach ($createdOrders as $order) {
+            // A. Send Order Confirmation to Customer
+            $user->notify(new OrderPlacedNotification($order));
+
+            // B. Send AdminNewOrderNotification directly to the shop owner (Admin model)
+            if ($order->shop && $order->shop->owner) {
+                $order->shop->owner->notify(new AdminNewOrderNotification($order));
+            }
+        }
+
+        return $createdOrders;
     }
+
+    /**
+     * Cancel an existing order if unpaid (if order in cod mode) and restore inventory stock.
+     */
     public function cancelOrder(Order $order, string $reason): Order
     {
-        return DB::transaction(function () use ($order, $reason) {
+        $cancelledOrder = DB::transaction(function () use ($order, $reason) {
             $order->update([
                 'status'              => 'cancelled',
                 'cancel_status'       => 'approved',
@@ -165,7 +193,8 @@ class OrderService
             foreach ($order->orderItems as $item) {
                 if ($item->product_id) {
                     $shopProduct = ShopProduct::where('shop_id', $order->shop_id)
-                        ->where('product_id', $item->product_id)
+                        ->where('id', $item->product_id)
+                        ->withShop($order->shop_id)
                         ->lockForUpdate()
                         ->first();
 
@@ -181,5 +210,12 @@ class OrderService
 
             return $order->fresh();
         });
+
+        // Dispatch status change and notify the amdin or shop  owners 
+        if ($cancelledOrder->shop && $cancelledOrder->shop->owner) {
+            $cancelledOrder->shop->owner->notify(new OrderStatusUpdatedNotification($cancelledOrder));
+        }
+
+        return $cancelledOrder;
     }
 }

@@ -25,7 +25,6 @@ class OrderController extends Controller
         ]);
 
         $orders = $orderService->checkout($request->user(), $validated);
-
         return response()->json([
             'success' => true,
             'message' => 'Order(s) placed successfully!',
@@ -108,10 +107,6 @@ class OrderController extends Controller
             'data'    => $order->fresh(),
         ]);
     }
-
-    /**
-     * Customer confirms physical receipt of the product.
-     */
     public function confirmReceived(Request $request, int $id, OrderSettlementService $settlementService): JsonResponse
     {
         $order = Order::with('shop')
@@ -169,10 +164,6 @@ class OrderController extends Controller
             'data'    => $order->fresh(),
         ]);
     }
-
-    /**
-     * Customer requests a return for a delivered order.
-     */
     public function requestReturn(Request $request, $id)
     {
         $request->validate([

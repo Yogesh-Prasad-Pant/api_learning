@@ -4,11 +4,10 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Shop;
-use App\Models\Product;
+use App\Models\ShopProduct;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
-
 
 class OrderSettlementService
 {
@@ -27,8 +26,15 @@ class OrderSettlementService
         }
 
         DB::transaction(function () use ($order) {
+            // Lock order row to guarantee single execution under heavy concurrency
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if ($lockedOrder->is_credited) {
+                return;
+            }
+
             // Lock shop row to safely mutate balance metrics
-            $shop = Shop::where('id', $order->shop_id)->lockForUpdate()->first();
+            $shop = Shop::where('id', $lockedOrder->shop_id)->lockForUpdate()->first();
 
             if (!$shop) {
                 throw ValidationException::withMessages([
@@ -36,13 +42,10 @@ class OrderSettlementService
                 ]);
             }
 
-            // 2. Calculate platform commission & vendor net earnings
-            $commissionRate   = $shop->commission_rate ?? 0.00; // e.g. 10.00%
-            $grossAmount       = $order->total_price; // Order total including items & shipping
-            $commissionAmount  = ($grossAmount * $commissionRate) / 100;
-            $vendorEarning     = $grossAmount - $commissionAmount;
+            // Use the vendor earnings pre-calculated during checkout
+            $vendorEarning = $lockedOrder->vendor_earning;
 
-            // 3. Increment vendor available balance
+            // Increment vendor available balance
             $shop->increment('balance', $vendorEarning);
 
             // Increment lifetime total earnings if column exists
@@ -50,23 +53,27 @@ class OrderSettlementService
                 $shop->increment('total_earnings', $vendorEarning);
             }
 
-            // 4. Update order settlement flags
-            $order->update([
-                'is_credited'       => true,
-                'commission_amount' => $commissionAmount,
-                'vendor_earning'    => $vendorEarning,
+            // Mark order as credited
+            $lockedOrder->update([
+                'is_credited' => true,
             ]);
         });
     }
+
+    /**
+     * Refund an order, reverse vendor earnings if credited, and restore shop inventory.
+     */
     public function refundOrder(Order $order): void
     {
         DB::transaction(function () use ($order) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
             // 1. If the shop was previously credited for this order, deduct earnings back
-            if ($order->is_credited) {
-                $shop = Shop::where('id', $order->shop_id)->lockForUpdate()->first();
+            if ($lockedOrder->is_credited) {
+                $shop = Shop::where('id', $lockedOrder->shop_id)->lockForUpdate()->first();
 
                 if ($shop) {
-                    $refundDeduction = $order->vendor_earning ?? 0.00;
+                    $refundDeduction = $lockedOrder->vendor_earning ?? 0.00;
 
                     // Deduct from available balance
                     $shop->decrement('balance', $refundDeduction);
@@ -78,15 +85,22 @@ class OrderSettlementService
                 }
             }
 
-            // 2. Restock ordered product items back to inventory
-            foreach ($order->orderItems as $item) {
+            // 2. Restock ordered product items back to inventory via ShopProduct
+            foreach ($lockedOrder->orderItems as $item) {
                 if ($item->product_id) {
-                    Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                    $shopProduct = ShopProduct::where('id', $item->product_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($shopProduct) {
+                        $shopProduct->increment('stock', $item->quantity);
+                        $shopProduct->update(['is_available' => true]);
+                    }
                 }
             }
 
             // 3. Update order settlement flags & payment status
-            $order->update([
+            $lockedOrder->update([
                 'is_credited'    => false,
                 'status'         => 'returned',
                 'payment_status' => 'refunded',

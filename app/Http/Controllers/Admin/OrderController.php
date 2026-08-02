@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use App\Notifications\OrderStatusUpdatedNotification;
+
 
 class OrderController extends Controller
 {
@@ -85,7 +87,10 @@ class OrderController extends Controller
                 $settlementService->settleOrder($freshOrder);
             }
         });
-
+        
+        if ($order->user) {
+            $order->user->notify(new OrderStatusUpdatedNotification($order));
+        }
         return response()->json([
             'message' => 'Order status updated successfully.',
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),
@@ -125,6 +130,9 @@ class OrderController extends Controller
             $order->update($updateData);
         });
 
+        if ($order->user) {
+            $order->user->notify(new OrderStatusUpdatedNotification($order));
+        }
         return response()->json([
             'message' => 'Order cancellation approved successfully and stock restored.',
             'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),

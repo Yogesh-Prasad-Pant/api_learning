@@ -57,7 +57,7 @@ class EsewaService
      */
     public function getPaymentPayload($order, string $transactionUuid): array
     {
-        $totalAmount = number_format($order->total_amount, 2, '.', '');
+        $totalAmount = number_format($order->total_price, 2, '.', '');
 
         $signature = $this->generateSignature($totalAmount, $transactionUuid);
 

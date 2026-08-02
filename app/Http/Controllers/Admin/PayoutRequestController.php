@@ -9,6 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Notifications\PayoutStatusNotification;
+use Illuminate\Support\Facades\Notification;
 
 class PayoutRequestController extends Controller
 {
@@ -131,6 +133,8 @@ class PayoutRequestController extends Controller
             if ($newStatus === 'completed' && $oldStatus !== 'completed') {
                 $payout->shop->increment('total_withdrawn', $payout->amount);
             }
+
+
 
             return response()->json([
                 'message' => "Payout request updated to {$newStatus} successfully.",
