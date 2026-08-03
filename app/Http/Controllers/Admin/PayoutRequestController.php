@@ -88,7 +88,11 @@ class PayoutRequestController extends Controller
                 'payment_details' => $validated['payment_details'],
                 'status'          => 'pending',
             ]);
-
+            
+             $superAdmin = User::where('role', 'superadmin')->first();
+            if ($superAdmin) {
+                $superAdmin->notify(new PayoutRequestedNotification($payoutRequest));
+            }
             return response()->json([
                 'message'     => 'Payout request submitted successfully.',
                 'new_balance' => $shop->fresh()->balance,
@@ -134,7 +138,9 @@ class PayoutRequestController extends Controller
                 $payout->shop->increment('total_withdrawn', $payout->amount);
             }
 
-
+             if ($payout->shop && $payout->shop->owner) {
+                $payout->shop->owner->notify(new PayoutStatusNotification($payout));
+            }
 
             return response()->json([
                 'message' => "Payout request updated to {$newStatus} successfully.",

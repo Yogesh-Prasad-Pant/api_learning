@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use App\Notifications\OrderStatusUpdatedNotification;
+use App\Notifications\PayoutRequestedNotification;
 
 
 class OrderController extends Controller
@@ -189,6 +190,11 @@ class OrderController extends Controller
                 'return_status' => 'rejected',
                 'admin_note'    => $validated['admin_note'] ?? $order->admin_note,
             ]);
+
+            $superAdmin = User::where('role', 'superadmin')->first();
+            if ($superAdmin) {
+                $superAdmin->notify(new PayoutRequestedNotification($payoutRequest));
+            }
 
             return response()->json([
                 'message' => 'Return request has been rejected.',

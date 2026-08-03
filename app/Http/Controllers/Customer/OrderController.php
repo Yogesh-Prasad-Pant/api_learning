@@ -10,6 +10,7 @@ use App\Services\OrderSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Notifications\OrderReturnRequestedNotification;
 
 class OrderController extends Controller
 {   
@@ -158,6 +159,9 @@ class OrderController extends Controller
             }
         });
 
+        if ($order->shop && $order->shop->owner) {
+            $order->shop->owner->notify(new OrderStatusUpdatedNotification($order));
+        }
         return response()->json([
             'success' => true,
             'message' => 'Order marked as received successfully!',
@@ -189,6 +193,14 @@ class OrderController extends Controller
             'return_requested_at' => now(),
         ]);
 
+        if ($order->shop && $order->shop->owner) {
+            $order->shop->owner->notify(new OrderReturnRequestedNotification($orderReturn));
+        }
+        // Notify Superadmin
+        $admin = User::where('role', 'superadmin')->first();
+        if ($admin) {
+            $admin->notify(new OrderReturnRequestedNotification($orderReturn));
+        }
         return response()->json([
             'success' => true,
             'message' => 'Return request submitted successfully. Waiting for store approval.',
