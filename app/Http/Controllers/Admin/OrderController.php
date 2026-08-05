@@ -191,11 +191,6 @@ class OrderController extends Controller
                 'admin_note'    => $validated['admin_note'] ?? $order->admin_note,
             ]);
 
-            $superAdmin = User::where('role', 'superadmin')->first();
-            if ($superAdmin) {
-                $superAdmin->notify(new PayoutRequestedNotification($payoutRequest));
-            }
-
             return response()->json([
                 'message' => 'Return request has been rejected.',
                 'order'   => new OrderResource($order->fresh(['user:id,name,email', 'orderItems', 'shop:id,shop_name'])),

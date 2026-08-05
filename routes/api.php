@@ -24,6 +24,8 @@ use App\Http\Controllers\Customer\MarketplaceController;
 use App\Http\Controllers\Customer\StorefrontController;
 use App\Http\Controllers\Customer\DashboardController as CustomerDashboardController;
 
+use App\Http\Controllers\NotificationController;
+
 use App\Http\Controllers\Payment\EsewaPaymentController;
 
     Route::prefix('customer')->group(function () {
@@ -67,6 +69,12 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                 Route::post('/{id}/confirm-received', [CustomerOrderController::class, 'confirmReceived']);
                 Route::post('/{id}/return', [CustomerOrderController::class, 'requestReturn']);
             });
+            Route::prefix('notifications')->group(function () {
+                Route::get('/', [NotificationController::class, 'index']);
+                Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
+                Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
+                Route::delete('/{id}', [NotificationController::class, 'destroy']);  
+            });
         });
         Route::prefix('cart')->group(function () {
             Route::get('/', [CartController::class, 'index']);         // Get cart items (grouped by shop)
@@ -108,11 +116,13 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                 
                 Route::get('/shops', [ShopController::class, 'index']);
                 Route::post('/shops', [ShopController::class, 'store']);
+
                 Route::middleware(['assign_shop'])->group(function (){
+
                     Route::prefix('dashboard')->group(function(){
                         Route::get('/stats', [AdminDashboardController::class, 'getStats']);
                         Route::get('/chart', [AdminDashboardController::class, 'getChartData']);
-                        Route::get('/orders', [AdminDashboardController::class, 'getRecentOrders']);
+                        Route::get('/recent-orders', [AdminDashboardController::class, 'getRecentOrders']);
                         Route::get('/toggle-status',[AdminDashboardController::class, 'toggleShopStatus']);
                     });
                     Route::prefix('shop')->group(function () {   
@@ -158,6 +168,7 @@ use App\Http\Controllers\Payment\EsewaPaymentController;
                         Route::delete('/global/force-delete/{product_id}',[ProductController::class, 'forceDeleteGlobalProduct']);
                     });
                 });
+                
                 Route::prefix('dashboard')->group(function(){
                     Route::get('/index', [AdminDashboardController::class, 'index']);
                 });

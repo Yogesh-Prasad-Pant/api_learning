@@ -97,6 +97,7 @@ class DashboardController extends Controller
         // Revenue based on vendor earnings from completed/paid orders
         $revenue = Order::whereIn('shop_id', $shopIds)
             ->where('created_at', '>=', $dateFilter)
+            ->where('status', 'delivered')
             ->sum('vendor_earning');
 
         // Order counts within the specified timeframe
