@@ -7,6 +7,9 @@ use App\Http\Controllers\Admin\PayoutRequestController;
 use App\Http\Controllers\Admin\CategoryRequestController;
 use App\Http\Controllers\Admin\CategoryController;
 
+  
+
+Route::get('/categories', [CategoryController::class, 'index']);
 Route::middleware(['auth:admin', 'super_admin'])->group(function () {
     Route::get('/super/dashboard', [AdminDashboardController::class, 'superIndex']);
     Route::get('/list', [AdminManagementController::class, 'index'])->name('admin.index');
@@ -30,7 +33,8 @@ Route::middleware(['auth:admin', 'super_admin'])->group(function () {
         Route::get('/', [CategoryController::class, 'index']);
         Route::post('/', [CategoryController::class, 'store']);
         Route::get('/{category}', [CategoryController::class, 'show']);
-        Route::post('/{category}', [CategoryController::class, 'update']);
+        Route::match(['put', 'post'], '/{category}', [CategoryController::class, 'update']);
         Route::delete('/{category}', [CategoryController::class, 'destroy']);
     });
+   
 });

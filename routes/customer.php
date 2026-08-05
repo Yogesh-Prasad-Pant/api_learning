@@ -9,8 +9,10 @@ use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\Customer\MarketplaceController;
 use App\Http\Controllers\Customer\StorefrontController;
 use App\Http\Controllers\Customer\DashboardController as CustomerDashboardController;
-
+use App\Http\Controllers\Admin\CategoryController;
 // Public Customer Routes
+Route::get('/categories', [CategoryController::class, 'index']);
+
 Route::post('/register', [CustomerAuthController::class, 'register']);
 
 Route::middleware('throttle:5,1')->group(function () {

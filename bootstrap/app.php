@@ -39,19 +39,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias(['super_admin' => IsSuperAdmin::class,]);
         $middleware->alias(['assign_shop' => \App\Http\Middleware\AssignShopContext::class,]);
         $middleware->redirectTo(
-        guests: fn (Request $request) => $request->expectsJson() || $request->is('api/*') 
-            ? null 
-            : route('login')
+        guests: fn (Request $request) => null
         );
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-        $exceptions->shouldRenderJsonWhen(function (Request $request, Throwable $e) {
-            if ($request->is('api/*')) {
+        $exceptions->shouldRenderJsonWhen(function (Request $request, \Throwable $e) {
                 return true;
-            }
-            return $request->expectsJson();
         });
         
     })->create();
