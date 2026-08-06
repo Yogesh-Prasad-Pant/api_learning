@@ -20,17 +20,25 @@ class CustomerController extends Controller
             ], 401);
         }
 
+        // Safely attempt relationship query without crashing the request
+        $defaultAddress = null;
+        try {
+            $defaultAddress = $user->defaultAddress;
+        } catch (\Throwable $e) {
+            $defaultAddress = null;
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'id'              => $user->id,
                 'name'            => $user->name,
                 'email'           => $user->email,
-                'phone'           => $user->phone,
-                'avatar'          => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                'city'            => $user->city,
-                'address'         => $user->address,
-                'default_address' => $user->defaultAddress, // Access as property directly!
+                'phone'           => $user->phone ?? null,
+                'avatar'          => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
+                'city'            => $user->city ?? null,
+                'address'         => $user->address ?? null,
+                'default_address' => $defaultAddress,
             ]
         ]);
     }
