@@ -20,10 +20,10 @@ class CustomerController extends Controller
                 'message' => 'Unauthenticated.'
             ], 401);
         }
-
+   dd('reached controller');
         // Check if the relation exists on the model
         $defaultAddress = method_exists($user, 'defaultAddress') ? $user->defaultAddress->first() : null;
-         dd('reached controller');
+      
         return response()->json([
             'success' => true,
             'data' => [
