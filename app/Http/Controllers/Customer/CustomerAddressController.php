@@ -28,7 +28,7 @@ class CustomerAddressController extends Controller
     }
     public function store(Request $request)
     {
-        try{
+        
         $validated = $request->validate([
             'full_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
@@ -42,30 +42,30 @@ class CustomerAddressController extends Controller
         ]);
 
         $user = $request->user();
+        try{
+            $address = DB::transaction(function () use ($user, $validated) {
+                $isFirstAddress = $user->addresses()->count() === 0;
+                $shouldBeDefault = !empty($validated['is_default']) || $isFirstAddress;
 
-        $address = DB::transaction(function () use ($user, $validated) {
-            $isFirstAddress = $user->addresses()->count() === 0;
-            $shouldBeDefault = !empty($validated['is_default']) || $isFirstAddress;
+                if ($shouldBeDefault && !$isFirstAddress) {
+                    // Unset all existing defaults for this user
+                    $user->addresses()->update(['is_default' => false]);
+                }
 
-            if ($shouldBeDefault) {
-                // Unset all existing defaults for this user
-                $user->addresses()->update(['is_default' => false]);
-            }
+                // Force is_default to true if it should be default
+                $validated['is_default'] = $shouldBeDefault;
 
-            // Force is_default to true if it should be default
-            $validated['is_default'] = $shouldBeDefault;
-
-            return $user->addresses()->create($validated);
-        });
+                return $user->addresses()->create($validated);
+            });
         }
         catch (\Throwable $e) {
-    return response()->json([
-        'status'  => false,
-        'message' => $e->getMessage(),
-        'file'    => $e->getFile(),
-        'line'    => $e->getLine()
-    ], 500);
-}
+            return response()->json([
+                'status'  => false,
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine()
+            ], 500);
+        }
 
         return response()->json([
             'status' => true,
