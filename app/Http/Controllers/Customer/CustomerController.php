@@ -11,19 +11,31 @@ class CustomerController extends Controller
 {
     public function profile(Request $request): JsonResponse
     {
-        $user = $request->user()->load('defaultAddress');
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.'
+            ], 401);
+        }
+
+        // Safely load relationship if method exists on model
+        if (method_exists($user, 'defaultAddress')) {
+            $user->load('defaultAddress');
+        }
 
         return response()->json([
             'success' => true,
             'data' => [
-                'id'       => $user->id,
-                'name'     => $user->name,
-                'email'    => $user->email,
-                'phone'    => $user->phone,
-                'avatar'   => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                'city'     => $user->city,
-                'address'  => $user->address,
-                'default_address' => $user->defaultAddress,
+                'id'              => $user->id,
+                'name'            => $user->name,
+                'email'           => $user->email,
+                'phone'           => $user->phone,
+                'avatar'          => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'city'            => $user->city ?? null,
+                'address'         => $user->address ?? null,
+                'default_address' => $user->relationLoaded('defaultAddress') ? $user->defaultAddress : null,
             ]
         ]);
     }
