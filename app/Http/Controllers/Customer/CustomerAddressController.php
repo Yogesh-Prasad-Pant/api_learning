@@ -12,6 +12,7 @@ class CustomerAddressController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        dd('reached address controller');
         // Auth middleware guarantees $request->user() is valid here
         $Addresses = null;
             try {
