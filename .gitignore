@@ -19,6 +19,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+/.scribe
+/public/docs
 /postman
 Homestead.json
 Homestead.yaml
