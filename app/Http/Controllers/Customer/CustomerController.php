@@ -11,7 +11,6 @@ class CustomerController extends Controller
 {
     public function profile(Request $request): JsonResponse
     {
-       
         $user = $request->user();
 
         if (!$user) {
@@ -20,10 +19,7 @@ class CustomerController extends Controller
                 'message' => 'Unauthenticated.'
             ], 401);
         }
-   dd('reached controller');
-        // Check if the relation exists on the model
-        $defaultAddress = method_exists($user, 'defaultAddress') ? $user->defaultAddress->first() : null;
-      
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -32,9 +28,9 @@ class CustomerController extends Controller
                 'email'           => $user->email,
                 'phone'           => $user->phone,
                 'avatar'          => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                'city'            => $user->city ?? null,
-                'address'         => $user->address ?? null,
-                'default_address' => $defaultAddress,
+                'city'            => $user->city,
+                'address'         => $user->address,
+                'default_address' => $user->defaultAddress, // Access as property directly!
             ]
         ]);
     }
