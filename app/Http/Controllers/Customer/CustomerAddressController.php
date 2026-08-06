@@ -22,7 +22,7 @@ class CustomerAddressController extends Controller
             }
         return response()->json([
             'status'  => true,
-            'message' => $Addresses? 'No addresses found.' : 'Addresses retrieved successfully.',
+            'message' => $Addresses? 'Addresses retrieved successfully.' : 'No addresses found.',
             'data'    => $Addresses,
         ], 200);
     }
