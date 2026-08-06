@@ -28,6 +28,7 @@ class CustomerAddressController extends Controller
     }
     public function store(Request $request)
     {
+        try{
         $validated = $request->validate([
             'full_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
@@ -56,6 +57,15 @@ class CustomerAddressController extends Controller
 
             return $user->addresses()->create($validated);
         });
+        }
+        catch (\Throwable $e) {
+    return response()->json([
+        'status'  => false,
+        'message' => $e->getMessage(),
+        'file'    => $e->getFile(),
+        'line'    => $e->getLine()
+    ], 500);
+}
 
         return response()->json([
             'status' => true,
