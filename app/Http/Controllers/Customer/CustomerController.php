@@ -11,6 +11,7 @@ class CustomerController extends Controller
 {
     public function profile(Request $request): JsonResponse
     {
+        dd('reached controller');
         $user = $request->user();
 
         if (!$user) {
