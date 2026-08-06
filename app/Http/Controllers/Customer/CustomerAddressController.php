@@ -6,17 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\JsonResponse;
 
 class CustomerAddressController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $addresses = $request->user()->addresses()->latest()->get();
-
+        // Auth middleware guarantees $request->user() is valid here
+        $Addresses = null;
+            try {
+                $Addresses = $request->user()->addresses()->latest()->get();
+            } catch (\Throwable $e) {
+                $Addresses = null;
+            }
         return response()->json([
-            'status' => true,
-            'data' => $addresses,
-        ]);
+            'status'  => true,
+            'message' => $Addresses->isEmpty() ? 'No addresses found.' : 'Addresses retrieved successfully.',
+            'data'    => $Addresses,
+        ], 200);
     }
     public function store(Request $request)
     {
@@ -55,7 +62,6 @@ class CustomerAddressController extends Controller
             'data' => $address,
         ], 201);
     }
-
     public function update(Request $request, CustomerAddress $customerAddress)
     {
         if ($customerAddress->user_id !== $request->user()->id) {

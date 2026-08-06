@@ -72,7 +72,6 @@ class CustomerController extends Controller
             'data'    => $user->fresh(),
         ]);
     }
-
     public function deactivateAccount(Request $request): JsonResponse
     {
         $user = $request->user();
