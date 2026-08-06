@@ -35,9 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias([ 'is_active' => \App\Http\Middleware\IsActiveAdmin::class,]);
-        $middleware->alias(['super_admin' => IsSuperAdmin::class,]);
-        $middleware->alias(['assign_shop' => \App\Http\Middleware\AssignShopContext::class,]);
+        $middleware->alias([ 
+            'is_active' => \App\Http\Middleware\IsActiveAdmin::class,
+            'super_admin' => \App\Http\Middleware\IsSuperAdmin::class,
+            'assign_shop' => \App\Http\Middleware\AssignShopContext::class,]);
         $middleware->redirectTo(
         guests: fn (Request $request) => null
         );
