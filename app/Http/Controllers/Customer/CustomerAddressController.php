@@ -12,7 +12,7 @@ class CustomerAddressController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        dd('reached address controller');
+        
         // Auth middleware guarantees $request->user() is valid here
         $Addresses = null;
             try {
@@ -22,7 +22,7 @@ class CustomerAddressController extends Controller
             }
         return response()->json([
             'status'  => true,
-            'message' => $Addresses->isEmpty() ? 'No addresses found.' : 'Addresses retrieved successfully.',
+            'message' => $Addresses? 'No addresses found.' : 'Addresses retrieved successfully.',
             'data'    => $Addresses,
         ], 200);
     }
