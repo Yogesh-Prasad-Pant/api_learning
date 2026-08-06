@@ -11,7 +11,7 @@ class CustomerController extends Controller
 {
     public function profile(Request $request): JsonResponse
     {
-        dd('reached controller');
+       
         $user = $request->user();
 
         if (!$user) {
@@ -23,7 +23,7 @@ class CustomerController extends Controller
 
         // Check if the relation exists on the model
         $defaultAddress = method_exists($user, 'defaultAddress') ? $user->defaultAddress->first() : null;
-
+         dd('reached controller');
         return response()->json([
             'success' => true,
             'data' => [
