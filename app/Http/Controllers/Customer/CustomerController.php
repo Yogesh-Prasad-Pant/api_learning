@@ -21,7 +21,7 @@ class CustomerController extends Controller
         }
 
         // Check if the relation exists on the model
-        $defaultAddress = method_exists($user, 'defaultAddress') ? $user->defaultAddress : null;
+        $defaultAddress = method_exists($user, 'defaultAddress') ? $user->defaultAddress->first() : null;
 
         return response()->json([
             'success' => true,
