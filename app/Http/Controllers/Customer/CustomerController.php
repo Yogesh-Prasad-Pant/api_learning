@@ -20,10 +20,8 @@ class CustomerController extends Controller
             ], 401);
         }
 
-        // Safely load relationship if method exists on model
-        if (method_exists($user, 'defaultAddress')) {
-            $user->load('defaultAddress');
-        }
+        // Check if the relation exists on the model
+        $defaultAddress = method_exists($user, 'defaultAddress') ? $user->defaultAddress : null;
 
         return response()->json([
             'success' => true,
@@ -35,11 +33,10 @@ class CustomerController extends Controller
                 'avatar'          => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 'city'            => $user->city ?? null,
                 'address'         => $user->address ?? null,
-                'default_address' => $user->relationLoaded('defaultAddress') ? $user->defaultAddress : null,
+                'default_address' => $defaultAddress,
             ]
         ]);
     }
-
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user();
