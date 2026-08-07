@@ -15,7 +15,12 @@ use App\Notifications\OrderReturnRequestedNotification;
 class OrderController extends Controller
 {   
     public function store(Request $request, OrderService $orderService): JsonResponse
-    {
+    {   
+        $user = $request->user();
+        $request->merge([
+            'customer_name' => $request->input('customer_name')?: $user->name,
+            'customer_phone' => $request->input('customer_phone')?: $user->phone,
+        ]);
         $validated = $request->validate([
             'customer_name'    => ['required', 'string', 'max:255'],
             'customer_phone'   => ['required', 'string', 'max:20'],
