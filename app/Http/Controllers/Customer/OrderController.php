@@ -18,8 +18,8 @@ class OrderController extends Controller
     {   
         $user = $request->user();
         $request->merge([
-            'customer_name' => $request->input('customer_name')?: $user->name,
-            'customer_phone' => $request->input('customer_phone')?: $user->phone,
+            'customer_name' => $request->input('customer_name') ?? $user->name,
+            'customer_phone' => $request->input('customer_phone') ?? $user->phone,
         ]);
         $validated = $request->validate([
             'customer_name'    => ['required', 'string', 'max:255'],
@@ -29,7 +29,7 @@ class OrderController extends Controller
             'payment_method'   => ['required', 'string', 'in:cod,stripe,khalti,esewa'],
             'customer_note'    => ['nullable', 'string', 'max:500'],
         ]);
-
+dd('i am at store');
         $orders = $orderService->checkout($request->user(), $validated);
         return response()->json([
             'success' => true,
