@@ -54,7 +54,6 @@ class OrderService
                     /** @var ShopProduct|null $shopProduct */
                     $shopProduct = ShopProduct::where('id', $item->shop_product_id)
                         ->where('shop_id', $shopId)
-                        ->withShop($shopId)
                         ->lockForUpdate()
                         ->first();
 

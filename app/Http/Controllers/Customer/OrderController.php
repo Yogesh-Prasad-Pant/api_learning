@@ -44,7 +44,6 @@ class OrderController extends Controller
                 ],
             ], 500);
         }
-        dd('i am at store');
         return response()->json([
             'success' => true,
             'message' => 'Order(s) placed successfully!',
