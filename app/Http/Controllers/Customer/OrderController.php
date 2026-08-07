@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Notifications\OrderReturnRequestedNotification;
+use Throwable;
 
 class OrderController extends Controller
 {   
@@ -29,8 +30,21 @@ class OrderController extends Controller
             'payment_method'   => ['required', 'string', 'in:cod,stripe,khalti,esewa'],
             'customer_note'    => ['nullable', 'string', 'max:500'],
         ]);
-dd('i am at store');
+        try{
         $orders = $orderService->checkout($request->user(), $validated);
+        }
+        catch(Throwable $e){
+            return response()->json([
+                'success' => "failed error occoured",
+                'message' => "Order placement failed: ". $e->getMessage(),
+                'error' => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getline(),
+                    'code' => $e->code(),
+                ],
+            ], 500);
+        }
+        dd('i am at store');
         return response()->json([
             'success' => true,
             'message' => 'Order(s) placed successfully!',
