@@ -39,8 +39,8 @@ class OrderController extends Controller
                 'message' => "Order placement failed: ". $e->getMessage(),
                 'error' => [
                     'file' => $e->getFile(),
-                    'line' => $e->getline(),
-                    'code' => $e->code(),
+                    'line' => $e->getLine(),
+                    'code' => $e->getCode(),
                 ],
             ], 500);
         }
