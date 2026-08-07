@@ -112,7 +112,7 @@ class OrderService
                     'commission_amount' => $commissionAmount,
                     'vendor_earning'    => $vendorEarning,
                     'status'            => 'pending',
-                    'payment_status'    => $validatedData['payment_method'] === 'cod' ? 'pending' : 'unpaid',
+                    'payment_status'    => $validatedData['payment_method'] === 'cod' ? 'unpaid' : 'paid',
                     'payment_method'    => $validatedData['payment_method'],
                     'customer_name'     => $validatedData['customer_name'],
                     'customer_phone'    => $validatedData['customer_phone'],
